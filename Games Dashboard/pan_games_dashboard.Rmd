@@ -1,0 +1,615 @@
+---
+title: "Healthy Minds For Life Games Tracker"
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: fill
+    orientation: columns
+    css: custom.css
+    social: menu
+    logo: PAN_logo3.png
+    favicon: PAN_logo3.png
+runtime: shiny
+editor_options: 
+  chunk_output_type: console
+---
+
+```{=html}
+<style type="text/css">
+
+  .chart-title {  /* chart_title  */
+    font-size: 22px;
+
+</style>
+```
+
+<!-- Server -->
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(shiny)
+library(flexdashboard)
+# devtools::install_github(repo="haozhu233/kableExtra", ref="a6af5c0")
+# Need to use the above to collapse rows properly
+library(kableExtra)
+library(openxlsx)
+
+theme_set(theme_bw())
+
+options(knitr.kable.NA = '')
+
+```
+
+```{r load data}
+
+load(file = "pan_games_files_list.Rdata")
+
+```
+
+```{r overall game calculations}
+
+overall_attempted <- files_list[[1]] %>%
+  select(participant_id, area, contains("game_status"), contains("timestamp"))
+
+for(i in 2:length(files_list)){
+  
+  overall_attempted <- merge(overall_attempted,
+                             files_list[[i]] %>%
+                               select(participant_id, area, contains("game_status"), contains("timestamp")),
+                             all = T,
+                             by = c("participant_id", "area"))
+}
+
+overall_attempted_table <- overall_attempted %>%
+  rbind(overall_attempted %>% mutate(area = "All")) %>%
+  select(-participant_id) %>%
+  select(-contains("timestamp")) %>%
+  mutate(area = str_to_title(area)) %>%
+  mutate(across(-area, ~ifelse(is.na(.) | . == "Not-Compeleted", 1, 0))) %>%
+  group_by(area) %>% mutate(nrow = n()) %>%
+  pivot_longer(cols = -c(area, nrow),
+               names_to = "game",
+               values_to = "missing") %>%
+  group_by(game, .add = T) %>%
+  summarise(number_missing = sum(missing),
+            percent_missing = sum(missing)/nrow * 100,
+            total_games = nrow,
+            .groups = "keep") %>%
+  ungroup() %>%
+  distinct() %>%
+  mutate(game = str_replace(game, "_game_status", ""),
+         game = case_when(game == "faces_names" ~ "Faces & Names",
+                          game == "objects_spatial" ~ "Objects & Spaces",
+                          game == "objects_temporal" ~ "Objects & Time",
+                          TRUE ~ str_to_title(str_replace(game, "_", " "))))
+
+```
+
+```{r functions for plots and tables}
+
+plot_function <- function(game = "All"){
+  if(game == "All"){
+    ggplot(overall_attempted_table, aes(x = reorder(game, percent_missing), 
+                                        y = percent_missing, color = area)) +
+      geom_point(size = 2) +
+      geom_line(aes(group = area), linewidth = 1) +
+      labs(x = "Games", y = "% Missing", color = "Area") +
+      theme(legend.position = "top",
+            axis.text.x = element_text(angle = 90,
+                                       hjust = 0.9,
+                                       vjust = 0.1),
+            text = element_text(size = 18))
+  }else{ # Look at a specific game for all areas
+    if(game == "attention"){ # Look at Attention game
+      files_list[["attention"]] %>%
+        rbind(files_list[["attention"]] %>% mutate(area = "All")) %>%
+        filter(attention_game_status == "Completed") %>%
+        mutate(area = str_to_title(area),
+               area = factor(area,
+                             levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
+        ggplot(aes(x = area, y = attnRT_median)) +
+        geom_boxplot(outlier.shape = NA, lwd = 1) +
+        geom_jitter(width = 0.25, height = 0, alpha = 0.5, color = "#224A7B", size = 2) +
+        labs(x = "Area", y = "Median Reaction Time") +
+        theme(legend.position = "none",
+            text = element_text(size = 18))
+    }else{ # Look at any other game
+      files_list[[game]] %>%
+        rbind(files_list[[game]] %>% mutate(area = "All")) %>%
+        filter(!!as.name(paste0(game, "_game_status")) == "Completed") %>%
+        mutate(area = str_to_title(area),
+               area = factor(area,
+                             levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
+        ggplot(aes(x = area, y = totalcorrect)) +
+        geom_boxplot(outlier.shape = NA, lwd = 1) +
+        geom_jitter(width = 0.25, height = 0, alpha = 0.5, color = "#224A7B", size = 2) +
+        labs(x = "Area", y = "Total Correct Answers Across Non-Practice Rounds") +
+        theme(legend.position = "none",
+            text = element_text(size = 18))
+    }
+  }
+}
+
+table_function <- function(picked_area = "All", game = "All", picked_id = "All"){
+  if(picked_area == "All"){
+    if(game == "All"){ # Look at all games for all areas
+     overall_attempted_table %>%
+        mutate(area = factor(area,
+                       levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
+        arrange(area) %>%
+        mutate(counts = paste0(number_missing, " (", round(percent_missing, 1), "%)"),
+               area = paste0(str_to_title(area), " \n (n = ", total_games, ")")) %>%
+        pivot_wider(id_cols = game,
+                    names_from = area,
+                    values_from = counts) %>%
+        rename(Game = game) %>%
+        kable(caption = "% Missing") %>%
+        kable_styling(full_width = F)
+    }else{ # Look at a specific game for all areas
+      if(game == "attention"){
+        files_list[[game]] %>%
+          rbind(files_list[[game]] %>% mutate(area = "All")) %>%
+          filter(attention_game_status == "Completed") %>%
+          mutate(area = str_to_title(area),
+                 area = factor(area,
+                               levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
+          select(area, attnRT_median) %>%
+          group_by(area) %>%
+          summarise(mean_sd = paste0(round(mean(attnRT_median, na.rm = T), 1), " (", 
+                                  round(sd(attnRT_median, na.rm = T), 1), ")")) %>%
+          pivot_wider(names_from = area, values_from = mean_sd) %>%
+          data.frame() %>%
+          `row.names<-`("Mean of Median Reaction Times (SD)") %>%
+        kable(row.names = T) %>%
+        kable_styling(full_width = F)
+      }else{
+        files_list[[game]] %>%
+          rbind(files_list[[game]] %>% mutate(area = "All")) %>%
+          filter(!!as.name(paste0(game, "_game_status")) == "Completed") %>%
+          mutate(area = str_to_title(area),
+                 area = factor(area,
+                               levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
+          select(area, totalcorrect) %>%
+          group_by(area) %>%
+          summarise(mean_sd = paste0(round(mean(totalcorrect, na.rm = T), 1), " (", 
+                                     round(sd(totalcorrect, na.rm = T), 1), ")")) %>%
+          pivot_wider(names_from = area, values_from = mean_sd) %>%
+          data.frame() %>%
+          `row.names<-`("Mean Total Correct (SD)") %>%
+          kable() %>%
+          kable_styling(full_width = F)
+      }
+    }
+  }else{ # Looking at specific area
+    if(game == "All"){
+      if(picked_id == "All"){ # Look at list of completed games for specific area
+        overall_attempted_table %>%
+          filter(area == picked_area) %>%
+          mutate(Missing = paste0(number_missing, " (", round(percent_missing, 1), "%)")) %>%
+          select(Game = game, Missing) %>%
+          kable() %>%
+          kable_styling(full_width = F)
+      }else{ # Look at list of completed games for a participant
+        overall_attempted %>%
+          filter(participant_id == picked_id) %>%
+          select(-c(participant_id, area)) %>%
+          rename_all(~str_remove(., "_game")) %>%
+          pivot_longer(cols =  everything(),
+                       names_to = c("game", ".value"),
+                       names_pattern = "(.*)_(.*)") %>%
+          mutate(game = str_replace(game, "_game_status", ""),
+                 game = case_when(game == "faces_names" ~ "Faces & Names",
+                                  game == "objects_spatial" ~ "Objects & Spaces",
+                                  game == "objects_temporal" ~ "Objects & Time",
+                                  TRUE ~ str_to_title(str_replace(game, "_", " "))),
+                 timestamp = as.character(timestamp),
+                 timestamp = ifelse(is.na(timestamp), "Not Attempted", timestamp)) %>%
+          select(Game = game, `Date Attempted` = timestamp, status) %>%
+          kable(col.names = c("Game", "Date Attempted", "")) %>%
+          kable_styling(full_width = F)
+      }
+    }else{
+      # Look at specific answers for a participant
+      files_list[[game]] %>%
+        filter(participant_id == picked_id) %>%
+        select(-c(participant_id, area, game_result, game_name, browser_useragent,
+                  user_agent, latitude, longitude, ip_address, language, tz_offset,
+                  zip_code, user_device)) %>%
+        mutate_all(as.character) %>%
+        pivot_longer(cols = everything(),
+                     names_to = "Variable",
+                     values_to = "record") %>%
+        mutate(record = ifelse(is.na(record), "Missing", record)) %>%
+        kable(col.names = c("Variable", "Participant Record")) %>%
+        kable_styling(full_width = F)
+    }
+  }
+}
+
+```
+
+```{r function for downloaded data and download handler}
+
+download_data_function <- function(picked_id){
+  
+  redcap_data_participant <- lapply(redcap_data, function(x){
+    new_x <- filter(x, participant_id == picked_id)
+    new_x
+  })
+  
+}
+
+output$downloadDataTucson <- downloadHandler(
+  filename = function(){
+    paste0("data_", picked_id_tucson(), "_", format(Sys.Date(), "%y%m%d"), ".xlsx")
+  },
+  content = function(file){
+    write.xlsx(download_data_function(picked_id_tucson()), file)
+  }
+)
+
+output$downloadDataAtlanta <- downloadHandler(
+  filename = function(){
+    paste0("data_", picked_id_atlanta(), "_", format(Sys.Date(), "%y%m%d"), ".xlsx")
+  },
+  content = function(file){
+    write.xlsx(download_data_function(picked_id_atlanta()), file)
+  }
+)
+
+output$downloadDataBaltimore <- downloadHandler(
+  filename = function(){
+    paste0("data_", picked_id_baltimore(), "_", format(Sys.Date(), "%y%m%d"), ".xlsx")
+  },
+  content = function(file){
+    write.xlsx(download_data_function(picked_id_baltimore()), file)
+  }
+)
+
+output$downloadDataMiami <- downloadHandler(
+  filename = function(){
+    paste0("data_", picked_id_miami(), "_", format(Sys.Date(), "%y%m%d"), ".xlsx")
+  },
+  content = function(file){
+    write.xlsx(download_data_function(picked_id_miami()), file)
+  }
+)
+
+```
+
+
+<!-- UI -->
+
+<br>
+
+{.sidebar}
+===================
+
+<br>
+
+```{r select game input}
+
+radioButtons("gamePick", label = "Select a game to view more detailed information.",
+            choices = list(
+              "All" = "all",
+              "Attention" = "attention", 
+              "Faces & Names" = "faces_names", 
+              "Focus" = "focus", 
+              "Keep Track" = "keep_track", 
+              # "Memory" = "memory",
+              "Objects" = "objects",
+              "Objects & Spaces" = "objects_spatial",
+              "Objects & Temporal" = "objects_temporal",
+              "React" = "react",
+              "Shapes" = "shapes",
+              "Switching" = "switching",
+              "Word Pairs" = "word_pairs"
+            ),
+            selected = "all")
+
+game <- reactive({input$gamePick})
+
+```
+
+# Overall
+
+Row
+-----------------------------
+
+### 
+
+```{r overall plot summaries}
+
+renderPlot({
+  if(game() == "all"){
+    plot_function()
+  }else{
+    plot_function(game = game())
+  }
+})
+
+```
+
+###
+
+```{r overall game summaries}
+
+shiny::renderUI(
+  HTML(
+    if(game() == "all"){
+      table_function()
+    }else{
+      table_function(game = game())
+    }
+  )
+)
+
+```
+
+# Tucson
+
+Column
+----------------------
+
+### Summary of Missing Data
+```{r display overall table for tucson}
+
+shiny::renderUI(
+  HTML(
+    table_function(picked_area = "Tucson")
+))
+
+```
+
+Row
+--------------------
+
+###
+
+<br>
+
+<center>
+```{r select id for tucson}
+
+selectInput("idPick_tucson", label = "Select a participant ID to view game information.",
+            choices = c(files_list[[1]]$participant_id[files_list[[1]]$area == "tucson"]))
+
+renderUI({downloadButton("downloadDataTucson", "Download Participant Data")})
+
+```
+</center>
+
+```{r display games for tucson}
+
+picked_id_tucson <- reactive({input$idPick_tucson})
+
+shiny::renderUI(
+  HTML(
+    if(game() == "all"){
+      if(picked_id_tucson() == "All"){
+        table_function(picked_area = "Tucson")
+      }else{
+        table_function(picked_area = "Tucson", picked_id = picked_id_tucson())
+      }
+    }else{
+      if(picked_id_tucson() == "All"){
+        table_function(picked_area = "Tucson", game = game())
+      }else{
+        table_function(picked_area = "Tucson", game = game(), picked_id = picked_id_tucson())
+      }
+    }
+  )
+)
+
+```
+
+
+# Atlanta
+
+
+Column
+----------------------
+
+### Summary of Missing Data
+
+```{r display plots for atlanta}
+
+shiny::renderUI(
+  HTML(
+    table_function(picked_area = "Atlanta")
+))
+
+```
+
+Row
+--------------------
+
+###
+
+<br>
+<center>
+```{r select id for atlanta}
+
+selectInput("idPick", label = "Select a participant ID to view game information.",
+            choices = c(files_list[[1]]$participant_id[files_list[[1]]$area == "atlanta"]))
+
+renderUI({downloadButton("downloadDataAtlanta", "Download Participant Data")})
+
+```
+</center>
+```{r display games for atlanta}
+
+picked_id_atlanta <- reactive({input$idPick})
+
+shiny::renderUI(
+  HTML(
+    if(game() == "all"){
+      if(picked_id_atlanta() == "All"){
+        table_function(picked_area = "Atlanta")
+      }else{
+        table_function(picked_area = "Atlanta", picked_id = picked_id_atlanta())
+      }
+    }else{
+      if(picked_id_atlanta() == "All"){
+        table_function(picked_area = "Atlanta", game = game())
+      }else{
+        table_function(picked_area = "Atlanta", game = game(), picked_id = picked_id_atlanta())
+      }
+    }
+  )
+)
+
+
+
+```
+
+# Baltimore
+
+
+Column
+----------------------
+
+### Summary of Missing Data
+
+```{r display plots for baltimore}
+
+shiny::renderUI(
+  HTML(
+    table_function(picked_area = "Baltimore")
+))
+
+
+```
+
+Row
+--------------------
+
+###
+
+<br>
+<center>
+```{r select id for baltimore}
+
+selectInput("idPick_baltimore", label = "Select a participant ID to view game information.",
+            choices = c(files_list[[1]]$participant_id[files_list[[1]]$area == "baltimore"]))
+
+renderUI({downloadButton("downloadDataBaltimore", "Download Participant Data")})
+
+```
+</center>
+```{r display games for baltimore}
+
+picked_id_baltimore <- reactive({input$idPick_baltimore})
+
+shiny::renderUI(
+  HTML(
+    if(game() == "all"){
+      if(picked_id_baltimore() == "All"){
+        table_function(picked_area = "Baltimore")
+      }else{
+        table_function(picked_area = "Baltimore", picked_id = picked_id_baltimore())
+      }
+    }else{
+      if(picked_id_baltimore() == "All"){
+        table_function(picked_area = "Baltimore", game = game())
+      }else{
+        table_function(picked_area = "Baltimore", game = game(), picked_id = picked_id_baltimore())
+      }
+    }
+  )
+)
+
+
+```
+
+
+# Miami
+
+
+Column
+----------------------
+
+### Summary of Missing Data
+
+```{r display plots for miami}
+
+shiny::renderUI(
+  HTML(
+    table_function(picked_area = "Miami")
+))
+
+```
+
+Row
+--------------------
+
+###
+
+<br>
+<center>
+```{r select id for miami}
+
+selectInput("idPick_miami", label = "Select a participant ID to view game information.",
+            choices = c(files_list[[1]]$participant_id[files_list[[1]]$area == "miami"]))
+
+renderUI({downloadButton("downloadDataMiami", "Download Participant Data")})
+
+```
+</center>
+```{r display games for miami}
+
+picked_id_miami <- reactive({input$idPick_miami})
+
+shiny::renderUI(
+  HTML(
+    if(game() == "all"){
+      if(picked_id_miami() == "All"){
+        table_function(picked_area = "Miami")
+      }else{
+        table_function(picked_area = "Miami", picked_id = picked_id_miami())
+      }
+    }else{
+      if(picked_id_miami() == "All"){
+        table_function(picked_area = "Miami", game = game())
+      }else{
+        table_function(picked_area = "Miami", game = game(), picked_id = picked_id_miami())
+      }
+    }
+  )
+)
+
+
+```
+
+
+# Help
+
+App information:
+
+This app displays summaries of game completion.
+
+Data:
+
+Currently the app uses local version of data.
+
+Last updated: `r format(Sys.time(), "%b %d, %Y %H:%M")`
+
+<html>
+
+<p>
+
+Copyright ©: 2023 StatLab, BIO5 ALL RIGHTS RESERVED
+
+</p>
+
+<p>
+
+Developer:
+
+</p>
+
+<p>
+
+Lisa White, Statistician <br/>
+
+</p>

@@ -1,0 +1,742 @@
+---
+title: "Healthy Minds For Life Survey Tracker"
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: fill
+    orientation: columns
+    css: custom.css
+    social: menu
+    logo: PAN_logo3.png
+    favicon: PAN_logo3.png
+runtime: shiny
+editor_options: 
+  chunk_output_type: console
+---
+
+```{=html}
+<style type="text/css">
+
+  .chart-title {  /* chart_title  */
+    font-size: 22px;
+
+</style>
+```
+
+<!-- Server -->
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(shiny)
+library(flexdashboard)
+# devtools::install_github(repo="haozhu233/kableExtra", ref="a6af5c0")
+# Need to use the above to collapse rows properly
+library(kableExtra)
+
+theme_set(theme_bw())
+
+```
+
+```{r load data}
+
+load(file = "pan_survey_files_list.Rdata")
+
+```
+
+```{r survey completion calculations}
+
+complete_files_list <- lapply(files_list, function(x){
+  new_x <- x %>%
+    mutate(across(-c(study_id, area, ends_with("_timestamp")), 
+                  ~ifelse(is.na(.) | . == "", 1, 0))) %>%
+    mutate(missing = select(., -c(study_id, area, ends_with("_timestamp"))) %>%
+             rowSums(na.rm = T),
+           completed = ifelse(!is.na(select(., ends_with("_timestamp"))) & missing == 0, "Completed", "Not Completed")) %>%
+    select(study_id, area, completed, everything(), -missing) %>%
+  rename(!!paste0(str_extract(names(.)[ncol(.)], ".*(?=_)"), "_completed") := completed)
+    
+  new_x
+})
+
+```
+
+```{r overall survey calculations}
+
+overall_attempted <- complete_files_list[[1]][1:3]
+
+for(i in 2:length(complete_files_list)){
+  overall_attempted <- merge(overall_attempted,
+                             complete_files_list[[i]][1:3],
+                             all = T,
+                             by = c("study_id", "area"))
+}
+
+overall_attempted_table <- overall_attempted %>%
+  rbind(overall_attempted %>% mutate(area = "All")) %>%
+  select(-study_id) %>%
+  mutate(across(everything(), as.character),
+         across(-area, ~ifelse(. == "Not Completed", 1, 0))) %>%
+  group_by(area) %>% mutate(nrow = n()) %>%
+  pivot_longer(cols = -c(area, nrow),
+               names_to = "survey",
+               values_to = "missing") %>%
+  group_by(survey, .add = T) %>%
+  summarise(number_missing = sum(missing),
+            percent_missing = sum(missing)/nrow * 100,
+            total_surveys = nrow,
+            .groups = "keep") %>%
+  distinct() %>%
+  mutate(survey = str_replace(survey, "_.*", "")) %>%
+  ungroup()
+
+overall_attempted_time <- files_list[[1]][1:3]
+
+for(i in 2:length(files_list)){
+  overall_attempted_time <- merge(overall_attempted_time,
+                             files_list[[i]][1:3],
+                             all = T,
+                             by = c("study_id", "area"))
+}
+
+```
+
+```{r functions for plots and tables}
+
+plot_function <- function(picked_area = "All", survey = "All"){
+  if(picked_area == "All"){
+    if(survey == "All"){
+      overall_attempted_table %>%
+        mutate(area = str_to_title(area)) %>%
+        ggplot(aes(x = survey, y = percent_missing, 
+                   color = area, group = area)) +
+        geom_point() +
+        geom_line() +
+        labs(x = "Survey", y = "% Missing", color = "Area") +
+        theme(legend.position = "top",
+              axis.text.x = element_text(angle = 90,
+                                         hjust = 0.9,
+                                         vjust = 0.1))
+    }else{ # Look at a specific survey for all areas
+      files_list[[survey]] %>%
+        select(-c(study_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
+        rbind(files_list[[survey]] %>%
+                select(-c(study_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
+                mutate(area = "All")) %>%
+        group_by(area) %>%
+        mutate(across(everything(), ~ifelse(is.na(.) | . == "", 1, 0)),
+               nrow = n()) %>%
+        pivot_longer(cols = -c(nrow, area)) %>%
+        group_by(name, .add = T) %>%
+        summarise(sum = sum(value),
+                  percent = sum(value)/nrow * 100,
+                  total = nrow) %>%
+        distinct() %>% ungroup() %>%
+        mutate(area = str_to_title(area)) %>%
+        mutate(name = factor(name, 
+                             levels = paste0(
+                               str_match(.$name[1], ".*\\_"), "v1.0.", 
+                               seq(from = 1, to = nrow(.))))) %>%
+        ggplot(aes(x = name, y = percent, col = area, group = area)) +
+        geom_point() +
+        geom_line() +
+        labs(x = "Item", y = "% Missing", color = "Area") +
+        theme(legend.position = "top",
+              axis.text.x = element_text(angle = 90))
+    }
+  }else{ # Look at specific area
+    if(survey == "All"){
+      overall_attempted_table %>%
+        filter(area == picked_area) %>%
+        ggplot(aes(x = survey, y = percent_missing)) +
+        geom_bar(stat = "identity", fill = "#224A7B",
+                 alpha = 0.5) +
+        labs(x = "Survey", y = "% Missing") +
+        scale_y_continuous(n.breaks = 10) +
+        theme(legend.position = "none",
+              axis.text.x = element_text(angle = 90,
+                                         hjust = 0.9,
+                                         vjust = 0.1))
+    }else{ # Look at specific survey for a specific area
+      files_list[[survey]] %>%
+        select(-c(study_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
+        rbind(files_list[[survey]] %>%
+                select(-c(study_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
+                mutate(area = "All")) %>%
+        group_by(area) %>%
+        mutate(across(everything(), ~ifelse(is.na(.) | . == "", 1, 0)),
+               nrow = n()) %>%
+        pivot_longer(cols = -c(nrow, area)) %>%
+        group_by(name, .add = T) %>%
+        summarise(sum = sum(value),
+                  percent = sum(value)/nrow * 100,
+                  total = nrow) %>%
+        distinct() %>% ungroup() %>%
+        filter(area == picked_area) %>%
+        mutate(name = factor(name, 
+                             levels = paste0(
+                               str_match(.$name[1], ".*\\_"), "v1.0.", 
+                               seq(from = 1, to = nrow(.))))) %>%
+        ggplot(aes(x = name, y = percent)) +
+        # geom_point(color = "#224A7B") +
+        # geom_line(group = 1, color = "#224A7B") +
+        geom_bar(stat = "identity", fill = "#224A7B",
+                 alpha = 0.5) +
+        labs(x = "Item", y = "% Missing", color = "Area") +
+        scale_y_continuous(n.breaks = 10) +
+        theme(legend.position = "top",
+              axis.text.x = element_text(angle = 90))
+    }
+  }
+}
+
+table_function <- function(picked_area = "All", survey = "All", picked_id = "All"){
+  if(picked_area == "All"){
+    if(survey == "All"){ # Look at all surveys for all areas
+      overall_attempted_table %>%
+        mutate(area = factor(area,
+                       levels = c("atlanta", "baltimore", "miami", "tucson", "All"))) %>%
+        arrange(area) %>%
+        mutate(counts = paste0(number_missing, " (", round(percent_missing, 1), "%)"),
+               area = paste0(str_to_title(area), " \n (n = ", total_surveys, ")")) %>%
+        pivot_wider(id_cols = survey,
+                    names_from = area,
+                    values_from = counts) %>%
+        mutate(survey = str_replace(names, "_", " "),
+               survey = str_to_title(survey),
+               survey = ifelse(survey %in% c("Adl", "Fhad", "Qpar", "Ses", "Swls"),
+                               toupper(survey), survey)) %>%
+        rename(Survey = survey) %>%
+        kable() %>%
+        kable_styling(full_width = F)
+    }else{ # Look at a specific survey for all areas
+      files_list[[survey]] %>%
+        select(-c(study_id, ends_with("_timestamp"))) %>%
+        rbind(files_list[[survey]] %>%
+                select(-c(study_id, ends_with("_timestamp"))) %>%
+                mutate(area = "All")) %>%
+        group_by(area) %>%
+        mutate(across(everything(), ~ifelse(is.na(.) | . == "", 1, 0)),
+               nrow = n()) %>%
+        pivot_longer(cols = -c(nrow, area)) %>%
+        group_by(name, .add = T) %>%
+        summarise(sum = sum(value),
+                  percent = sum(value)/nrow * 100,
+                  total = nrow) %>%
+        distinct() %>% ungroup() %>%
+        mutate(area = factor(area,
+                       levels = c("atlanta", "baltimore", "miami", "tucson", "All"))) %>%
+        arrange(area) %>%
+        mutate(area = paste0(str_to_title(area), " (n = ", total, ")"),
+               name = factor(name, 
+                             levels = paste0(
+                               str_match(.$name[1], ".*\\_"), "v1.0.", 
+                               seq(from = 1, to = nrow(.)))),
+               counts = paste0(sum, " (", round(percent, 1), "%)")) %>%
+        pivot_wider(id_cols = name,
+                    names_from = area,
+                    values_from = counts) %>%
+        arrange(name) %>%
+        left_join(survey_data_dictionary %>% select(name = item, question),
+                  by = "name") %>%
+        select(name, question, everything()) %>%
+        rename(Item = name, Text = question) %>%
+        distinct() %>%
+        kable %>%
+        kable_styling(full_width = F)
+    }
+  }else{
+    if(survey == "All"){
+      if(picked_id == "All"){ # Look at list of completed surveys for specific area
+        overall_attempted_table %>%
+          filter(area == picked_area) %>%
+          mutate(Missing = paste0(number_missing, " (", round(percent_missing, 1), "%)")) %>%
+          select(Survey = survey, Missing) %>%
+          mutate(Survey = str_replace(names, "_", " "),
+                 Survey = str_to_title(Survey),
+                 Survey = ifelse(Survey %in% c("Adl", "Fhad", "Qpar", "Ses", "Swls"),
+                                 toupper(Survey), Survey)) %>%
+          kable() %>%
+          kable_styling(full_width = F)
+      }else{ # Look at list of completed surveys for a participant
+        overall_attempted_time %>%
+          filter(study_id == picked_id) %>%
+          select(-c(study_id, area)) %>%
+          mutate_all(~format(as.Date(.), "%b %d, %Y")) %>%
+          mutate_all(~ifelse(is.na(.), "Not Attempted", .)) %>%
+          rename_all(~str_to_title(str_replace(names, "_", " "))) %>%
+          rename_all(~ifelse(. %in% c("Adl", "Fhad", "Qpar", "Ses", "Swls"),
+                             toupper(.), .)) %>%
+          pivot_longer(cols = everything(),
+                       names_to = "Survey",
+                       values_to = "Date Attempted") %>%
+          left_join(overall_attempted %>%
+                      filter(study_id == picked_id) %>%
+                      select(-c(study_id, area)) %>%
+                      rename_all(~str_to_title(str_replace(names, "_", " "))) %>%
+                      rename_all(~ifelse(. %in% c("Adl", "Fhad", "Qpar", "Ses", "Swls"),
+                                         toupper(.), .)) %>%
+                      pivot_longer(cols = everything(),
+                                   names_to = "Survey",
+                                   values_to = "Completed"),
+                    by = "Survey") %>%
+          mutate(Completed = ifelse(`Date Attempted` == "Not Attempted", "", Completed)) %>%
+          kable(col.names = c("Survey", "Date Attempted", "")) %>%
+          kable_styling(full_width = F)
+      }
+    }else{
+      if(picked_id == "All"){ # Look at completed items for specific survey
+        files_list[[survey]] %>%
+          filter(area == picked_area) %>%
+          select(-c(study_id, area, ends_with("_timestamp"))) %>%
+          mutate(across(everything(), ~ifelse(is.na(.) | . == "", 1, 0)),
+                 nrow = n()) %>%
+          pivot_longer(cols = -nrow) %>%
+          group_by(name) %>%
+          summarise(sum = sum(value),
+                    percent = sum(value)/nrow * 100,
+                    total = nrow) %>%
+          distinct() %>%
+          mutate(name = factor(name, 
+                               levels = paste0(
+                                 str_match(.$name[1], ".*\\_"), "v1.0.", 
+                                 seq(from = 1, to = nrow(.)))),
+                 counts = paste0(sum, " (", round(percent, 1), "%)")) %>%
+          arrange(name) %>%
+          left_join(survey_data_dictionary %>% select(name = item, question),
+                    by = "name") %>%
+          select(name, question, everything()) %>%
+          select(Item = name, Text = question, `Percent Missing` = counts) %>%
+          distinct() %>%
+          kable %>%
+          kable_styling(full_width = F)
+      }else{ # Look at specific answers for a participant
+        files_list[[survey]] %>%
+          filter(area == picked_area, study_id == picked_id) %>%
+          select(-c(study_id, area, ends_with("_timestamp"))) %>%
+          select(paste0(str_extract(names(.), ".*(?=_)"), "_v1.0.", 1:ncol(.))) %>%
+          mutate_all(as.character) %>%
+          pivot_longer(cols = everything(),
+                       names_to = "Item",
+                       values_to = "Response") %>%
+          mutate(Response = ifelse(is.na(Response) | Response == "", "Missing",
+                                   ifelse(Response == "Not missing", "Not Applicable",
+                                          Response))) %>%
+          left_join(survey_data_dictionary %>% select(name = item, question),
+                    by = c("Item" = "name")) %>%
+          select(Item, Text = question, Response) %>%
+          distinct() %>%
+          kable %>%
+          kable_styling(full_width = F)
+      }
+    }
+  }
+}
+
+```
+
+```{r function for downloaded data and download handler}
+
+download_data_function <- function(picked_id){
+  
+  redcap_data_participant <- filter(redcap_data, study_id == picked_id) %>%
+    select(-study_id)
+  
+}
+
+output$downloadDataTucson <- downloadHandler(
+  filename = function(){
+    paste0("data_", picked_id_tucson(), "_", format(Sys.Date(), "%y%m%d"), ".csv")
+  },
+  content = function(file){
+    write.csv(download_data_function(picked_id_tucson()), file,
+              row.names = FALSE)
+  }
+)
+
+output$downloadDataAtlanta <- downloadHandler(
+  filename = function(){
+    paste0("data_", picked_id_atlanta(), "_", format(Sys.Date(), "%y%m%d"), ".csv")
+  },
+  content = function(file){
+    write.csv(download_data_function(picked_id_atlanta()), file,
+              row.names = FALSE)
+  }
+)
+
+output$downloadDataBaltimore <- downloadHandler(
+  filename = function(){
+    paste0("data_", picked_id_baltimore(), "_", format(Sys.Date(), "%y%m%d"), ".csv")
+  },
+  content = function(file){
+    write.csv(download_data_function(picked_id_baltimore()), file,
+              row.names = FALSE)
+  }
+)
+
+output$downloadDataMiami <- downloadHandler(
+  filename = function(){
+    paste0("data_", picked_id_miami(), "_", format(Sys.Date(), "%y%m%d"), ".csv")
+  },
+  content = function(file){
+    write.csv(download_data_function(picked_id_miami()), file,
+              row.names = FALSE)
+  }
+)
+
+```
+
+
+<!-- UI -->
+
+<br>
+
+{.sidebar}
+===================
+
+<br>
+
+```{r select survey input}
+
+radioButtons("surveyPick", label = "Select a specific survey to view more detailed information.",
+            choices = list(
+              "All" = "all",
+              "ADL" = "adl", 
+              "Anxiety" = "anxiety", 
+              "Brain Disease" = "brain_disease", 
+              "Covid" = "covid", 
+              "Diet" = "diet",
+              "FHAD" = "fhad",
+              "Health and Medical" = "health_medical",
+              "Perceived Stress" = "perceived_stress",
+              "QPAR" = "qpar",
+              "SES" = "ses",
+              "Sleep" = "sleep",
+              "Social Stressor" = "social_stressor",
+              "Social Support" = "social_support",
+              "Subjective English" = "subjective_english",
+              "SWLS" = "swls"
+            ),
+            selected = "all")
+
+survey <- reactive({input$surveyPick})
+
+```
+
+# Overall
+
+Row
+-----------------------------
+
+### 
+
+```{r overall plot summaries}
+
+renderPlot({
+  if(survey() == "all"){
+    plot_function()
+  }else{
+    plot_function(survey = survey())
+  }
+})
+
+```
+
+###
+
+```{r overall survey summaries}
+
+shiny::renderUI(
+  HTML(
+    if(survey() == "all"){
+      table_function()
+    }else{
+      table_function(survey = survey())
+    }
+  )
+)
+
+```
+
+# Tucson
+
+Column
+----------------------
+
+### Summary of Missing Data
+```{r display overall table for tucson}
+
+shiny::renderUI(
+  HTML(
+  if(survey() == "all"){
+    table_function(picked_area = "tucson")
+  }else{
+    table_function(picked_area = "tucson", survey = survey())
+  }
+))
+
+```
+
+Row
+--------------------
+
+###
+
+<br>
+
+<center>
+```{r select id for tucson}
+
+selectInput("idPick_tucson", label = "Select a participant ID to view survey entres.",
+            choices = c(files_list[[1]]$study_id[files_list[[1]]$area == "tucson"]))
+
+renderUI({downloadButton("downloadDataTucson", "Download Participant Data")})
+
+```
+</center>
+
+```{r display surveys for tucson}
+
+picked_id_tucson <- reactive({input$idPick_tucson})
+
+shiny::renderUI(
+  HTML(
+    if(survey() == "all"){
+      if(picked_id_tucson() == "All"){
+        table_function(picked_area = "tucson")
+      }else{
+        table_function(picked_area = "tucson", picked_id = picked_id_tucson())
+      }
+    }else{
+      if(picked_id_tucson() == "All"){
+        table_function(picked_area = "tucson", survey = survey())
+      }else{
+        table_function(picked_area = "tucson", survey = survey(), picked_id = picked_id_tucson())
+      }
+    }
+  )
+)
+
+```
+
+
+# Atlanta
+
+
+Column
+----------------------
+
+### Summary of Missing Data
+
+```{r display plots for atlanta}
+
+shiny::renderUI(
+  HTML(
+  if(survey() == "all"){
+    table_function(picked_area = "atlanta")
+  }else{
+    table_function(picked_area = "atlanta", survey = survey())
+  }
+))
+
+```
+
+Row
+--------------------
+
+###
+
+<br>
+<center>
+```{r select id for atlanta}
+
+selectInput("idPick", label = "Select a participant ID to view survey entres.",
+            choices = c(files_list[[1]]$study_id[files_list[[1]]$area == "atlanta"]))
+
+renderUI({downloadButton("downloadDataAtlanta", "Download Participant Data")})
+
+```
+</center>
+```{r display surveys for atlanta}
+
+picked_id_atlanta <- reactive({input$idPick})
+
+shiny::renderUI(
+  HTML(
+    if(survey() == "all"){
+      if(picked_id_atlanta() == "All"){
+        table_function(picked_area = "atlanta")
+      }else{
+        table_function(picked_area = "atlanta", picked_id = picked_id_atlanta())
+      }
+    }else{
+      if(picked_id_atlanta() == "All"){
+        table_function(picked_area = "atlanta", survey = survey())
+      }else{
+        table_function(picked_area = "atlanta", survey = survey(), picked_id = picked_id_atlanta())
+      }
+    }
+  )
+)
+
+
+
+```
+
+# Baltimore
+
+
+Column
+----------------------
+
+### Summary of Missing Data
+
+```{r display plots for baltimore}
+
+shiny::renderUI(
+  HTML(
+  if(survey() == "all"){
+    table_function(picked_area = "baltimore")
+  }else{
+    table_function(picked_area = "baltimore", survey = survey())
+  }
+))
+
+
+```
+
+Row
+--------------------
+
+###
+
+<br>
+<center>
+```{r select id for baltimore}
+
+selectInput("idPick_baltimore", label = "Select a participant ID to view survey entres.",
+            choices = c(files_list[[1]]$study_id[files_list[[1]]$area == "baltimore"]))
+
+renderUI({downloadButton("downloadDataBaltimore", "Download Participant Data")})
+
+```
+</center>
+```{r display surveys for baltimore}
+
+picked_id_baltimore <- reactive({input$idPick_baltimore})
+
+shiny::renderUI(
+  HTML(
+    if(survey() == "all"){
+      if(picked_id_baltimore() == "All"){
+        table_function(picked_area = "baltimore")
+      }else{
+        table_function(picked_area = "baltimore", picked_id = picked_id_baltimore())
+      }
+    }else{
+      if(picked_id_baltimore() == "All"){
+        table_function(picked_area = "baltimore", survey = survey())
+      }else{
+        table_function(picked_area = "baltimore", survey = survey(), picked_id = picked_id_baltimore())
+      }
+    }
+  )
+)
+
+
+```
+
+
+# Miami
+
+
+Column
+----------------------
+
+### Summary of Missing Data
+
+```{r display plots for miami}
+
+shiny::renderUI(
+  HTML(
+  if(survey() == "all"){
+    table_function(picked_area = "miami")
+  }else{
+    table_function(picked_area = "miami", survey = survey())
+  }
+))
+
+```
+
+Row
+--------------------
+
+###
+
+<br>
+<center>
+```{r select id for miami}
+
+selectInput("idPick_miami", label = "Select a participant ID to view survey entres.",
+            choices = c(files_list[[1]]$study_id[files_list[[1]]$area == "miami"]))
+
+renderUI({downloadButton("downloadDataMiami", "Download Participant Data")})
+
+```
+</center>
+```{r display surveys for miami}
+
+picked_id_miami <- reactive({input$idPick_miami})
+
+shiny::renderUI(
+  HTML(
+    if(survey() == "all"){
+      if(picked_id_miami() == "All"){
+        table_function(picked_area = "miami")
+      }else{
+        table_function(picked_area = "miami", picked_id = picked_id_miami())
+      }
+    }else{
+      if(picked_id_miami() == "All"){
+        table_function(picked_area = "miami", survey = survey())
+      }else{
+        table_function(picked_area = "miami", survey = survey(), picked_id = picked_id_miami())
+      }
+    }
+  )
+)
+
+
+```
+
+
+# Help
+
+App information:
+
+This app displays summaries of survey completion.
+
+Data:
+
+Currently the app uses local version of data.
+
+Last updated: `r format(Sys.time(), "%b %d, %Y %H:%M")`
+
+<html>
+
+<p>
+
+Copyright ©: 2023 StatLab, BIO5 ALL RIGHTS RESERVED
+
+</p>
+
+<p>
+
+Developer:
+
+</p>
+
+<p>
+
+Lisa White, Statistician <br/>
+
+</p>
