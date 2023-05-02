@@ -121,7 +121,6 @@ for(sheet in sheet_names){
 }
 
 # Check logic branches to determine whether data is actually missing or just not applicable
-
 files_list  <- survey_logic_branching(files_list)
 
 # Formatting for REDCap import -----------
