@@ -1,13 +1,17 @@
 
+rm(list = ls())
+
+# Load Libraries -------------
+
 library(tidyverse)
 
 source("mindcrowd_data_processing_functions_230322.R")
 
-today_date <- format(Sys.Date(), "%Y-%m-%d")
+mindcrowd_folder <- "C:/Users/Lisa/Box/[UA BOX Health] MindCrowd Inbound"
 
-memory_data <- read.csv(paste0("D:/Precision Aging Network/Dashboards/Data from Box/", today_date, "memory.csv.gz"))
+memory_data <- read.csv(paste0(mindcrowd_folder, "/Current/memory.csv"))
 
-mindcrowd_data <- read.csv(paste0("D:/Precision Aging Network/Dashboards/Data from Box/", today_date, "participants.csv.gz"))
+mindcrowd_data <- read.csv(paste0(mindcrowd_folder, "/Current/participants.csv"))
 
 screening_data <- create_screening_data(mindcrowd_data, memory_data, campaign_code = T)
 
@@ -19,7 +23,7 @@ data <- screening_data %>%
                           area %in% "baltimore" ~ "Baltimore",
                           area %in% "atlanta" ~ "Atlanta"))
 
-save(data, file = paste0("D:/Precision Aging Network/Dashboards/PAN Pre-Screening Dashboard/mindcrowd_screening_data.Rdata"))
+save(data, file = paste0("PAN Pre-Screening Dashboard/mindcrowd_screening_data.Rdata"))
 
 # Save campaign code data
 
@@ -37,6 +41,6 @@ codes <- mindcrowd_data %>%
   select(participant_id, area, campaign_code)
 
 save(codes, 
-     file = paste0("D:/Precision Aging Network/Dashboards/PAN Pre-Screening Dashboard/mindcrowd_campaign_codes.Rdata"))
+     file = paste0("PAN Pre-Screening Dashboard/mindcrowd_campaign_codes.Rdata"))
 
 print("Saved Pre-Screening Dataset!")

@@ -34,13 +34,18 @@ participant_data <- raw_participant_data %>%
   select(participant_id, participant_id_parent, area, email, created_date_participant)
 
 ## Survey Data ~~~~~
-system_date <- format(Sys.Date(), "%Y-%m-%d")
+
+files_dates <- list.files(mindcrowd_folder)
+files_dates <- unique(str_sub(files_dates[grep(".csv", files_dates)], end = 10))
+files_dates <- files_dates[grep("20", files_dates)]
+
+most_recent_update <- files_dates[order(files_dates, decreasing = T)][1]
 
 names <- c("adl", "anxiety", "brain_disease", "covid", "diet", "fhad", 
            "health_medical", "perceived_stress", "qpar", "ses", "sleep",
            "social_stressor", "social_support", "subjective_english", "swls")
 
-files <- paste0(mindcrowd_folder, "/", system_date, names, ".csv.gz")
+files <- paste0(mindcrowd_folder, "/", most_recent_update, names, ".csv.gz")
 
 raw_files_list <- lapply(files, 
                          function(x){read.csv(x) %>% mutate_all(~ifelse(. == "", NA, .))})

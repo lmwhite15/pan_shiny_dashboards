@@ -10,35 +10,40 @@ library(openxlsx)
 
 # Load data --------------------
 
-system_date <- format(Sys.Date(), "%Y-%m-%d")
+# system_date <- format(Sys.Date(), "%Y-%m-%d")
 
-game_folder <- paste0("C:/Users/Lisa/Box/[UA BOX Health] MindCrowd Inbound")
+mindcrowd_folder <- paste0("C:/Users/Lisa/Box/[UA BOX Health] MindCrowd Inbound")
 
-participant_data <- read.csv(paste0(game_folder, "/Current/participants.csv")) 
+participant_data <- read.csv(paste0(mindcrowd_folder, "/Current/participants.csv")) 
 
-names <- list.files(game_folder)
+names <- list.files(mindcrowd_folder)
 
 ## Load results data
 
-names <- str_replace(names[which(str_detect(names, "responses") & str_detect(names, system_date))], "_responses", "")
+files_dates <- unique(str_sub(names[grep(".csv", names)], end = 10))
+files_dates <- files_dates[grep("20", files_dates)]
+
+most_recent_update <- files_dates[order(files_dates, decreasing = T)][1]
+
+names <- str_replace(names[which(str_detect(names, "responses") & str_detect(names, most_recent_update))], "_responses", "")
 names <- str_sub(names, start = 11, end = -8)
 names <- names[-which(names == "memory")]
 
-files <- paste0(game_folder, "/", system_date, names, ".csv.gz")
+files <- paste0(mindcrowd_folder, "/", most_recent_update, names, ".csv.gz")
 
 raw_files_list <- lapply(files, 
                          function(x){read.csv(x)})
 
 ## Load responses data
 
-response_files <- paste0(game_folder, "/", system_date, names, "_responses.csv.gz")
+response_files <- paste0(mindcrowd_folder, "/", most_recent_update, names, "_responses.csv.gz")
 
 response_raw_files_list <- lapply(response_files, 
                                   function(x){read.csv(x)})
 
 # Set up participant data --------------
 
-recruitment_zip_codes <- read.csv("D:/Precision Aging Network/Dashboards/recruitment_zip_codes.csv")
+recruitment_zip_codes <- read.csv("recruitment_zip_codes.csv")
 
 participant_data$area <- dplyr::case_when(participant_data$mailing_postalcode %in% recruitment_zip_codes$zip_code[which(recruitment_zip_codes$recruit_location == "tucson")] ~ "tucson",
                                           participant_data$mailing_postalcode %in% recruitment_zip_codes$zip_code[which(recruitment_zip_codes$recruit_location == "miami")] ~ "miami",
@@ -236,6 +241,6 @@ response_files_list[["react"]] <- files_list[["react"]] %>%
 redcap_data <- response_files_list
 
 save(names, files_list, redcap_data,
-     file = paste0("D:/Precision Aging Network/Dashboards/Games Dashboard/pan_games_files_list.Rdata"))
+     file = paste0("Games Dashboard/pan_games_files_list.Rdata"))
 
 print("Saved Games Dataset!")

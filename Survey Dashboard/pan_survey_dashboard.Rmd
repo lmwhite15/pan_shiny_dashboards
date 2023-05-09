@@ -459,23 +459,6 @@ shiny::renderUI(
 
 # Tucson
 
-Column
-----------------------
-
-### Summary of Missing Data
-```{r display overall table for tucson}
-
-shiny::renderUI(
-  HTML(
-  if(survey() == "all"){
-    table_function(picked_area = "tucson")
-  }else{
-    table_function(picked_area = "tucson", survey = survey())
-  }
-))
-
-```
-
 Row
 --------------------
 
@@ -521,25 +504,6 @@ shiny::renderUI(
 
 # Atlanta
 
-
-Column
-----------------------
-
-### Summary of Missing Data
-
-```{r display plots for atlanta}
-
-shiny::renderUI(
-  HTML(
-  if(survey() == "all"){
-    table_function(picked_area = "atlanta")
-  }else{
-    table_function(picked_area = "atlanta", survey = survey())
-  }
-))
-
-```
-
 Row
 --------------------
 
@@ -584,26 +548,6 @@ shiny::renderUI(
 
 # Baltimore
 
-
-Column
-----------------------
-
-### Summary of Missing Data
-
-```{r display plots for baltimore}
-
-shiny::renderUI(
-  HTML(
-  if(survey() == "all"){
-    table_function(picked_area = "baltimore")
-  }else{
-    table_function(picked_area = "baltimore", survey = survey())
-  }
-))
-
-
-```
-
 Row
 --------------------
 
@@ -647,25 +591,6 @@ shiny::renderUI(
 
 
 # Miami
-
-
-Column
-----------------------
-
-### Summary of Missing Data
-
-```{r display plots for miami}
-
-shiny::renderUI(
-  HTML(
-  if(survey() == "all"){
-    table_function(picked_area = "miami")
-  }else{
-    table_function(picked_area = "miami", survey = survey())
-  }
-))
-
-```
 
 Row
 --------------------
