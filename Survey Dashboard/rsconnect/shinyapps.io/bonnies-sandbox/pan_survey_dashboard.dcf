@@ -1,0 +1,11 @@
+name: pan_survey_dashboard
+title: Healthy Minds For Life Survey Tracker
+username:
+account: bonnies-sandbox
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 8058830
+bundleId: 7268696
+url: https://bonnies-sandbox.shinyapps.io/pan_survey_dashboard/
+when: 1685125679.17912
+lastSyncTime: 1685125679.17913

@@ -12,5 +12,5 @@ deployApp(account = 'bonnies-sandbox',
           appName = "pan_recruitment_new",
           appTitle = "PAN Recruitment Dashboard")
 
-# Last deployed: 17-Apr-23
+# Last deployed: 25-May-23
 

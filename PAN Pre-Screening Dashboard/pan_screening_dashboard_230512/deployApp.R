@@ -1,3 +1,5 @@
+# https://docs.rstudio.com/shinyapps.io/getting-started.html#deploying-applications
+# I got the code below through the link above.
 
 library(rsconnect)
 
@@ -7,8 +9,8 @@ rsconnect::setAccountInfo(name='bonnies-sandbox',
 
 # Make sure custom.css is in workspace
 deployApp(account = 'bonnies-sandbox',
-          appName = "pan_game_dashboard",
-          appTitle = "Healthy Minds For Life Games Tracker")
+          appName = "pan_recruitment_new",
+          appTitle = "PAN Recruitment Dashboard")
 
-# Last deployed: 26-May-23
+# Last deployed: 17-Apr-23
 

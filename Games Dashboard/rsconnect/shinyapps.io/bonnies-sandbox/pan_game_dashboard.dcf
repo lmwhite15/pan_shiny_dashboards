@@ -1,0 +1,11 @@
+name: pan_game_dashboard
+title: Healthy Minds For Life Games Tracker
+username:
+account: bonnies-sandbox
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 8388133
+bundleId: 7268714
+url: https://bonnies-sandbox.shinyapps.io/pan_game_dashboard/
+when: 1685126061.05784
+lastSyncTime: 1685126061.05786
