@@ -1,0 +1,143 @@
+---
+title: "HML ID Assignment"
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: scroll
+    css: custom.css
+    social: menu
+    logo: PAN_logo3.png
+    favicon: PAN_logo3.png
+runtime: shiny
+editor_options: 
+  chunk_output_type: console
+---
+
+```{=html}
+<style type="text/css">
+
+  .chart-title {  /* chart_title  */
+    font-size: 22px;
+
+</style>
+```
+<!-- Server -->
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(shiny)
+library(flexdashboard)
+# devtools::install_github(repo="haozhu233/kableExtra", ref="a6af5c0")
+# Need to use the above to collapse rows properly
+library(kableExtra)
+
+```
+
+```{r load data}
+
+load("deidentified_id_data.Rdata")
+
+```
+
+<!-- UI -->
+
+<br>
+
+{.sidebar}
+===================
+<br>
+
+```{r select area}
+
+radioButtons("areaPick", label = "Please select the area where the participant was recruited.",
+            choices = c("Atlanta", "Baltimore", "Miami", "Tucson"),
+            selected = "Tucson")
+
+```
+
+# Generate New HML ID
+
+<p style="color:Tomato;">Note: need to separate the IDs by area</p>
+
+## Row
+
+#### 
+
+```{r id dropdown}
+
+area <- reactive({input$areaPick})
+
+id_choices <- filter(dat, area == area)
+
+selectInput("idPick", label = "Select the participant's MindCrowd ID.",
+            choices = id_choices$part_id, selected = NULL)
+
+```
+
+---
+
+```{r display participant info}
+
+picked_id_data <- reactive({filter(dat, part_id == input$idPick)})
+
+shiny::renderUI(
+  HTML(
+    if(input$idPick == ""){
+      print("Select a MindCrowd ID to continue.")
+    }else{
+      kable(picked_id_data(),
+            col.names = c("Participant ID", "Mindcrowd ID", "Area", "Age Group", "Sex"),
+            ) %>%
+        kable_styling(full_width = FALSE)
+    }
+  )
+)
+
+```
+
+```{r eligibility confirmation}
+
+```
+
+
+---
+
+
+
+```{r creating HML ID}
+
+```
+
+
+
+# Help
+
+App information:
+
+This app generates a new HML ID for new participants that qualify for recruitment. 
+
+Data:
+
+Currently the app uses local version of data.
+
+Last updated: `r format(Sys.time(), "%b %d, %Y %H:%M")`
+
+<html>
+
+<p>
+
+Copyright ©: 2022 StatLab, BIO5 ALL RIGHTS RESERVED
+
+</p>
+
+<p>
+
+Developer:
+
+</p>
+
+<p>
+
+Lisa White, Statistician <br/>
+
+</p>
