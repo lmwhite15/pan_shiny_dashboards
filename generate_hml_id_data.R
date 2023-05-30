@@ -21,11 +21,11 @@ library(tidyverse)
 
 atl_dat <- read.csv("C:/Users/Lisa/Box/For Lisa/atlanta_recruitment_list_export.csv")
 
-bal_dat <- read.csv("C:/Users/Lisa/Box/For Lisa/atlanta_recruitment_list_export.csv")
+bal_dat <- read.csv("C:/Users/Lisa/Box/For Lisa/baltimore_recruitment_list_export.csv")
 
-mia_dat <- read.csv("C:/Users/Lisa/Box/For Lisa/atlanta_recruitment_list_export.csv")
+mia_dat <- read.csv("C:/Users/Lisa/Box/For Lisa/miami_recruitment_list_export.csv")
 
-tuc_dat <- read.csv("C:/Users/Lisa/Box/For Lisa/atlanta_recruitment_list_export.csv")
+tuc_dat <- read.csv("C:/Users/Lisa/Box/For Lisa/tucson_recruitment_list_export.csv")
 
 # Combine data, de-identify and select variables --------
 
@@ -38,9 +38,12 @@ dat <- rbind(atl_dat %>% mutate(area = "Atlanta"),
                                age %in% 60:69 ~ "60-69",
                                age %in% 70:79 ~ "70-79"),
          part_id = str_sub(participant_id, start = -8)) %>%
-  select(participant_id, part_id, area, age_group, sex)
+  select(participant_id, part_id, area, age_group, sex) %>%
+  mutate(hml_id = NA,
+         hml_id_created_date = NA)
 
 # Save data -------------
 
-save(dat, file = "ID Assignment Dashboard/deidentified_id_data.Rdata")
+# Check to make sure you don't save over the saved HML IDs
+# write.csv(dat, file = "ID Assignment Dashboard/deidentified_id_data.csv", row.names = F)
 

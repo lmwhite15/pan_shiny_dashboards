@@ -35,7 +35,7 @@ library(kableExtra)
 
 ```{r load data}
 
-load("deidentified_id_data.Rdata")
+dat <- read.csv("deidentified_id_data.csv")
 
 ```
 
@@ -49,45 +49,50 @@ load("deidentified_id_data.Rdata")
 
 ```{r select area}
 
+# Select recruitment area
+
 radioButtons("areaPick", label = "Please select the area where the participant was recruited.",
-            choices = c("Atlanta", "Baltimore", "Miami", "Tucson"),
-            selected = "Tucson")
+            choices = c("Atlanta", "Baltimore", "Miami", "Tucson"))
 
 ```
 
 # Generate New HML ID
 
-<p style="color:Tomato;">Note: need to separate the IDs by area</p>
-
 ## Row
 
 #### 
 
+<center>
+
 ```{r id dropdown}
 
-area <- reactive({input$areaPick})
+# Display IDs from selected area (areaPick)
 
-id_choices <- filter(dat, area == area)
+id_choices <- reactive(
+  filter(dat, area == input$areaPick)
+)
 
-selectInput("idPick", label = "Select the participant's MindCrowd ID.",
-            choices = id_choices$part_id, selected = NULL)
+renderUI(
+  selectInput("idPick", label = "Select the participant's MindCrowd ID.",
+              choices = c("",id_choices()$part_id), selected = NULL)
+)
+
 
 ```
 
----
+</center>
 
 ```{r display participant info}
 
-picked_id_data <- reactive({filter(dat, part_id == input$idPick)})
+# Display selected participant's (idPick) demographics
 
-shiny::renderUI(
+picked_id_data <- reactive(filter(dat, part_id == input$idPick))
+
+renderUI(
   HTML(
-    if(input$idPick == ""){
-      print("Select a MindCrowd ID to continue.")
-    }else{
-      kable(picked_id_data(),
-            col.names = c("Participant ID", "Mindcrowd ID", "Area", "Age Group", "Sex"),
-            ) %>%
+    if(isTruthy(input$idPick)){
+      kable(picked_id_data() %>% select(participant_id:sex),
+            col.names = c("Participant ID", "Mindcrowd ID", "Area", "Age Group", "Sex")) %>%
         kable_styling(full_width = FALSE)
     }
   )
@@ -95,18 +100,122 @@ shiny::renderUI(
 
 ```
 
-```{r eligibility confirmation}
+<center>
+
+```{r check if participant is in hml already}
+
+renderText(
+  HTML(
+    if(isTruthy(input$idPick)){
+      if(!is.na((picked_id_data()$hml_id))){ 
+        # If participant already has an HMl ID
+        paste0("This participant was assigned HML ID ", picked_id_data()$hml_id," on ", as.Date(picked_id_data()$hml_id_created_date) %>% format("%b %d, %Y"), ".")
+      }else{ 
+        # If person doesn't have an ID yet
+        "This participant does not have an HML ID yet."
+      }
+    }
+  )
+)
 
 ```
 
+</center>
 
----
+```{r eligibility confirmation}
 
+# Get user input for whether participant is eligible for study (eligiblePick) and doesn't have an HML ID
 
+renderUI(
+  if(isTruthy(input$idPick)){ # Display if user selects an ID
+    if(is.na((picked_id_data()$hml_id))){
+      radioButtons("eligiblePick", label = "Is this person eligible for the study?",
+                   choices = c("Yes", "No"), selected = "No")
+    }
+  }
+)
+
+```
+
+```{r create id confirmation}
+
+renderUI(
+    if(isTruthy(input$eligiblePick)){
+      if(input$eligiblePick == "Yes"){
+        actionButton("newId", "Create New HML ID", icon = icon("plus"))
+      }
+    }
+)
+
+```
 
 ```{r creating HML ID}
 
+new_hml_id <- eventReactive(input$newId, {
+  req(input$newId)
+  paste0("HML", str_pad(sum(!is.na(dat$hml_id)) + 1, 4, pad = 0))
+})
+
+new_data <- reactive({
+  new_hml_id <- new_hml_id()
+  
+  dat$hml_id[which(dat$part_id == input$idPick)] <- new_hml_id
+  dat$hml_id_created_date[which(dat$part_id == input$idPick)] <- as.character(format(Sys.Date(), "%Y-%m-%d"))
+  
+  dat
+})
+
+renderUI({
+  HTML(
+    new_data()[which(dat$part_id == input$idPick),] %>%
+      remove_rownames() %>%
+      kable(col.names = c("Participant ID", "Mindcrowd ID", "Area", "Age Group", "Sex",
+                                      "HML ID", "HML Created Date")) %>%
+      kable_styling(full_width = FALSE)
+  )
+})
+
 ```
+
+```{r save new id}
+
+renderUI(
+    if(isTruthy(input$newId)){
+        actionButton("saveId", "Save New HML ID", icon = icon("download"))
+    }
+)
+
+
+
+```
+
+<center>
+
+```{r save and confirmation}
+
+renderText({
+  req(input$saveId)
+  
+  write.csv(new_data(), file = "deidentified_id_data.csv", row.names = FALSE)
+  
+  print("Saved New ID.")
+})
+
+```
+</center>
+
+---
+
+```{r enter another participant, eval = FALSE}
+
+renderText({
+  req(input$saveId)
+  print("Would you like to create another HML ID?")
+})
+
+```
+
+
 
 
 
