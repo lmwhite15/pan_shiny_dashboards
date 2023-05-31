@@ -12,5 +12,4 @@ deployApp(account = 'bonnies-sandbox',
           appName = "hml_id_assignment",
           appTitle = "PAN HML ID Assignment")
 
-# Last deployed: 25-May-23
-
+# Last deployed: 30-May-23

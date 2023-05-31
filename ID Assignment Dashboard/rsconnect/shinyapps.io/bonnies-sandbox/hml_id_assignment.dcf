@@ -1,0 +1,11 @@
+name: hml_id_assignment
+title: PAN HML ID Assignment
+username:
+account: bonnies-sandbox
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 9219577
+bundleId: 7284611
+url: https://bonnies-sandbox.shinyapps.io/hml_id_assignment/
+when: 1685503525.30097
+lastSyncTime: 1685503525.30098
