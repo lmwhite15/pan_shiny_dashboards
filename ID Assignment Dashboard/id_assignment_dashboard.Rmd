@@ -166,50 +166,12 @@ renderUI(
 
 ```
 
-```{r creating HML ID, eval = F}
-
-renderUI(
-  # Display if participant is eligible for study
-    if(isTruthy(input$idPick) & isTruthy(input$eligiblePick)){
-      if(input$eligiblePick == "Yes"){
-        actionButton("newId", "Create New HML ID", icon = icon("plus"))
-      }
-    }
-)
-
-# Create new HML ID
-new_hml_id <- eventReactive(input$newId, {
-  req(input$newId)
-  paste0("HML", str_pad(sum(!is.na(dat$hml_id)) + 1, 4, pad = 0))
-})
-
-# Create new dataset with 
-new_data <- reactive({
-  
-  dat$hml_id[which(dat$part_id == input$idPick)] <- new_hml_id()
-  dat$hml_id_created_date[which(dat$part_id == input$idPick)] <- as.character(format(Sys.Date(), "%Y-%m-%d"))
-  
-  dat
-})
-
-renderUI({
-  HTML(
-    new_data()[which(dat$part_id == input$idPick),] %>%
-      remove_rownames() %>%
-      kable(col.names = c("Participant ID", "Mindcrowd ID", "Area", "Age Group", "Sex",
-                                      "HML ID", "HML Created Date")) %>%
-      kable_styling(full_width = FALSE)
-  )
-})
-
-```
-
 ```{r creating HML ID new}
 
 # Display button if participant is eligible for study
 renderUI(
     if(isTruthy(input$idPick) & isTruthy(input$eligiblePick)){
-      if(input$eligiblePick == "Yes"){
+      if(input$eligiblePick == "Yes" & is.na((picked_id_data()$hml_id))){
         actionButton("newId", "Create New HML ID", icon = icon("plus"))
       }
     }
@@ -217,13 +179,19 @@ renderUI(
 
 # Show data with new HML ID for confirmation
 renderUI({
-  HTML(
-    new_data()[which(dat$part_id == input$idPick),] %>%
-      remove_rownames() %>%
-      kable(col.names = c("Participant ID", "Mindcrowd ID", "Area", "Age Group", "Sex",
-                                      "HML ID", "HML Created Date")) %>%
-      kable_styling(full_width = FALSE)
-  )
+  # If there is an eligiblePick object created
+  if(isTruthy(input$idPick) & isTruthy(input$eligiblePick)){ 
+    # Only show button if person does not already have an HML ID
+    if(input$eligiblePick == "Yes" & is.na((picked_id_data()$hml_id))){
+      HTML(
+        new_data()[which(dat$part_id == input$idPick),] %>%
+          remove_rownames() %>%
+          kable(col.names = c("Participant ID", "Mindcrowd ID", "Area", "Age Group", "Sex",
+                              "HML ID", "HML Created Date")) %>%
+          kable_styling(full_width = FALSE)
+      )
+    }
+  }
 })
 
 ```
@@ -231,30 +199,14 @@ renderUI({
 ```{r save new id}
 
 renderUI(
-    if(isTruthy(input$newId)){
+    if(isTruthy(input$idPick) & isTruthy(input$newId)){
+      if(is.na((picked_id_data()$hml_id))){
         actionButton("saveId", "Save New HML ID", icon = icon("download"))
+      }
     }
 )
 
 ```
-
-<center>
-
-```{r save and confirmation, eval = F}
-
-renderText({
-  req(input$saveId)
-  
-  if(isTruthy(input$newId)){
-    write.csv(new_data(), file = "deidentified_id_data.csv", row.names = FALSE)
-    dat <- read.csv("deidentified_id_data.csv")
-    print("Saved New ID.")
-  }
-  
-})
-
-```
-</center>
 
 ---
 
