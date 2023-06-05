@@ -12,9 +12,4 @@ deployApp(account = 'bonnies-sandbox',
           appName = "hml_id_assignment",
           appTitle = "PAN HML ID Assignment")
 
-# Last deployed: 30-May-23
-
-
-# Get files from shinyapps.io bundle download
-untar(tarfile = "C:/Users/Lisa/Downloads/1f32e16ef42647f58e8fa929c7245d20 (1).tar", 
-      exdir = "C:/Users/Lisa/Downloads/")
+# Last deployed: 31-May-23
