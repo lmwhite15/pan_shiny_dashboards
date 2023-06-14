@@ -19,13 +19,21 @@ library(tidyverse)
 
 # Load recruitment lists ---------
 
-atl_dat <- read.csv("C:/Users/Lisa/Box/For Lisa/atlanta_recruitment_list_export.csv")
+mindcrowd_folder <- "C:/Users/Lisa/Box/[UA BOX Health] MindCrowd Inbound/"
 
-bal_dat <- read.csv("C:/Users/Lisa/Box/For Lisa/baltimore_recruitment_list_export.csv")
+files_dates <- list.files(mindcrowd_folder)
+files_dates <- unique(str_sub(files_dates[grep(".csv", files_dates)], end = 10))
+files_dates <- files_dates[grep("20", files_dates)]
 
-mia_dat <- read.csv("C:/Users/Lisa/Box/For Lisa/miami_recruitment_list_export.csv")
+most_recent_update <- files_dates[order(files_dates, decreasing = T)][1]
 
-tuc_dat <- read.csv("C:/Users/Lisa/Box/For Lisa/tucson_recruitment_list_export.csv")
+atl_dat <- read.csv(paste0(mindcrowd_folder, most_recent_update, "recruitment_list_atlanta.csv.gz"))
+
+bal_dat <- read.csv(paste0(mindcrowd_folder, most_recent_update, "recruitment_list_baltimore.csv.gz"))
+
+mia_dat <- read.csv(paste0(mindcrowd_folder, most_recent_update, "recruitment_list_miami.csv.gz"))
+
+tuc_dat <- read.csv(paste0(mindcrowd_folder, most_recent_update, "recruitment_list_tucson.csv.gz"))
 
 # Combine data, de-identify and select variables --------
 
