@@ -17,8 +17,7 @@ screening_data <- create_screening_data(mindcrowd_data, memory_data, campaign_co
 
 data <- screening_data %>%
   select(-email) %>%
-  mutate(across(where(is.factor), .funs = fct_explicit_na),
-         area = case_when(area %in% "tucson" ~ "Tucson",
+  mutate(area = case_when(area %in% "tucson" ~ "Tucson",
                           area %in% "miami" ~ "Miami",
                           area %in% "baltimore" ~ "Baltimore",
                           area %in% "atlanta" ~ "Atlanta"))

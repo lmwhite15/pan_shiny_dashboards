@@ -5,7 +5,7 @@ account: bonnies-sandbox
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 8388133
-bundleId: 7268714
+bundleId: 7377413
 url: https://bonnies-sandbox.shinyapps.io/pan_game_dashboard/
-when: 1685126061.05784
-lastSyncTime: 1685126061.05786
+when: 1687469962.13803
+lastSyncTime: 1687469962.13804

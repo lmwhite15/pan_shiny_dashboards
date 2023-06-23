@@ -10,5 +10,5 @@ deployApp(account = 'bonnies-sandbox',
           appName = "pan_game_dashboard",
           appTitle = "Healthy Minds For Life Games Tracker")
 
-# Last deployed: 26-May-23
+# Last deployed: 22-Jun-23
 

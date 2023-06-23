@@ -109,7 +109,7 @@ files_list <- lapply(raw_files_list, function(x){
 
 # Load and format data dictionary set -----------------
 
-data_dictionary_file <- "D:/Precision Aging Network/Dashboards/Survey Info Document.xlsx"
+data_dictionary_file <- "Survey Info Document.xlsx"
 
 sheet_names <- getSheetNames(data_dictionary_file)
 
@@ -161,7 +161,7 @@ files_list <- lapply(files_list, function(x){
 })
 
 save(names, files_list, survey_data_dictionary, redcap_data,
-     file = paste0("D:/Precision Aging Network/Dashboards/Survey Dashboard/pan_survey_files_list.Rdata"))
+     file = "Survey Dashboard/pan_survey_files_list.Rdata")
 
 print("Saved Survey Dataset!")
 

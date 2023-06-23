@@ -43,8 +43,6 @@ filter_no_contact <- function(){
 create_screening_data <- function(mindcrowd_data, memory_data, dag_area = "All", campaign_code = FALSE){
   # Required Libraries: tidyverse (for now? case_when uses dplyr)
   
-  print(paste("Screening data area:", dag_area))
-  
   # Creating race group, age group, and area variables --------------------------------------------------------
   
   mindcrowd_data$race_group <- dplyr::case_when(mindcrowd_data$hispanic_latino == "Yes" ~ "Hispanic",
