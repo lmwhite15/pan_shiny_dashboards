@@ -5,6 +5,13 @@ rm(list = ls())
 
 library(tidyverse)
 
+# section to connect to Google Drive
+library(googledrive)
+# file with info for service account 
+drive_auth(path = "pan-mindcrowd-uploads-ddf6b0dbe662.json")
+# Option to silence the messages coming from the Google Drive library
+options(googledrive_quiet = TRUE)
+
 # Load recruitment lists ---------
 
 mindcrowd_folder <- "C:/Users/Lisa/Box/[UA BOX Health] MindCrowd Inbound/"
@@ -25,7 +32,7 @@ tuc_dat <- read.csv(paste0(mindcrowd_folder, most_recent_update, "recruitment_li
 
 # Combine data, de-identify and select variables --------
 
-dat <- rbind(atl_dat %>% mutate(area = "Atlanta"), 
+new_dat <- rbind(atl_dat %>% mutate(area = "Atlanta"), 
              bal_dat %>% mutate(area = "Baltimore"), 
              mia_dat %>% mutate(area = "Miami"), 
              tuc_dat %>% mutate(area = "Tucson")
@@ -36,14 +43,25 @@ dat <- rbind(atl_dat %>% mutate(area = "Atlanta"),
          part_id = str_sub(participant_id, start = -8)) %>%
   select(participant_id, part_id, area, age_group, sex) %>%
   mutate(hml_id = NA,
-         hml_id_created_date = NA)
+         hml_id_created_date = NA,
+         hml_id_undo = NA)
 
-# Remove participants who already have HML IDs
+# Remove participants who already have HML IDs ------
 
+# Downloads current deidentified_id_data.csv and overwrites existing file
+with_drive_quiet(
+  drive_download(as_id("https://drive.google.com/file/d/1GbJUTmt96x50L9fDH4RGIIt05zoOWEbo"), overwrite = TRUE)
+)
+dat <- read.csv("deidentified_id_data.csv")
 
+# Filters out already existing participant ids and adds new IDs
+updated_dat <- new_dat %>%
+  filter(!participant_id %in% dat$participant_id) %>%
+  rbind(dat)
 
 # Save data -------------
 
+write.csv(updated_dat, file = "deidentified_id_data.csv")
 # Check to make sure you don't save over the saved HML IDs
-# write.csv(dat, file = "ID Assignment Dashboard/deidentified_id_data.csv", row.names = F)
-
+# Saves the modified file to Google Drive into the HML Data shared drive
+drive_put("deidentified_id_data.csv", path=drive_find(pattern="HML Data", corpus="allDrives"))

@@ -1,6 +1,6 @@
 ---
 title: "HML ID Assignment"
-output: 
+output:
   flexdashboard::flex_dashboard:
     vertical_layout: scroll
     css: custom.css
@@ -8,8 +8,10 @@ output:
     logo: PAN_logo3.png
     favicon: PAN_logo3.png
 runtime: shiny
-editor_options: 
+editor_options:
   chunk_output_type: console
+resource_files:
+- www/deidentified_id_data.csv
 ---
 
 ```{=html}
@@ -29,11 +31,21 @@ library(flexdashboard)
 # devtools::install_github(repo="haozhu233/kableExtra", ref="a6af5c0")
 # Need to use the above to collapse rows properly
 library(kableExtra)
+# section to connect to Google Drive
+library(googledrive)
+# file with info for service account 
+drive_auth(path = "pan-mindcrowd-uploads-ddf6b0dbe662.json")
+# Option to silence the messages coming from the Google Drive library
+options(googledrive_quiet = TRUE)
 
 ```
 
 ```{r load data}
 
+# Downloads deidentified_id_data.csv and overwrites existing file
+with_drive_quiet(
+  drive_download(as_id("https://drive.google.com/file/d/1GbJUTmt96x50L9fDH4RGIIt05zoOWEbo"), overwrite = TRUE)
+)
 dat <- read.csv("deidentified_id_data.csv")
 
 ```
@@ -53,7 +65,12 @@ picked_id_data <- reactive(
 # Create new ID and add to dataset for confirmation -------
 new_data <- reactive({
   req(input$newId)
-  new_hml_id <- paste0("HML", str_pad(sum(!is.na(dat$hml_id)) + 1, 4, pad = 0))
+  
+  if(!is.na(dat$hml_id_undo[which(dat$part_id == (input$idPick))])){
+    new_hml_id <- dat$hml_id_undo[which(dat$part_id == (input$idPick))]
+  }else{
+    new_hml_id <- paste0("HML", str_pad(sum(!is.na(dat$hml_id)) + sum(!is.na(dat$hml_id_undo)) + 1, 4, pad = 0))
+  }
   
   dat$hml_id[which(dat$part_id == (input$idPick))] <- new_hml_id
   dat$hml_id_created_date[which(dat$part_id == (input$idPick))] <- as.character(format(Sys.Date(), "%Y-%m-%d"))
@@ -64,9 +81,15 @@ new_data <- reactive({
 downloadNewData <- observe({
   if(isTruthy(input$saveId)){
     isolate({
-      new_hml_id <- paste0("HML", str_pad(sum(!is.na(dat$hml_id)) + 1, 4, pad = 0))
       
       new_dat <- dat
+      
+      if(!is.na(new_dat$hml_id_undo[which(new_dat$part_id == (input$idPick))])){
+        new_hml_id <- new_dat$hml_id_undo[which(new_dat$part_id == (input$idPick))]
+        new_dat$hml_id_undo[which(new_dat$part_id == (input$idPick))] <- NA
+      }else{
+        new_hml_id <- paste0("HML", str_pad(sum(!is.na(dat$hml_id)) + sum(!is.na(dat$hml_id_undo)) + 1, 4, pad = 0))
+      }
       
       new_dat$hml_id[which(new_dat$part_id == (input$idPick))] <- new_hml_id
       new_dat$hml_id_created_date[which(new_dat$part_id == (input$idPick))] <- as.character(format(Sys.Date(), "%Y-%m-%d"))})
@@ -74,6 +97,32 @@ downloadNewData <- observe({
     write.csv(new_dat, file = "deidentified_id_data.csv", row.names = F)
     
     dat <<- read.csv("deidentified_id_data.csv")
+    # Saves the modified file to Google Drive into the HML Data shared drive
+    drive_put("deidentified_id_data.csv", path=drive_find(pattern="HML Data", corpus="allDrives"))
+    # Pop up status message and page reload
+    shinyalert::shinyalert('Saved', callbackJS = "function() {location.reload()}")
+  }
+})
+
+# Undo HML ID assignment -------------
+# Filter IDs by input area areaPick and display assigned IDs
+id_choices_undo <- reactive(
+  filter(dat, area == input$areaPick, !is.na(hml_id))
+)
+
+downloadNewDataUndo <- observe({
+  if(isTruthy(input$saveIdUndo)){
+    new_dat <- dat
+    
+    new_dat$hml_id_undo[which(new_dat$hml_id == input$idPickUndo)] <- input$idPickUndo
+    new_dat$hml_id[which(new_dat$hml_id == input$idPickUndo)] <- NA
+    
+    write.csv(new_dat, file = "deidentified_id_data.csv", row.names = F)
+    
+    # Saves the modified file to Google Drive into the HML Data shared drive
+    drive_put("deidentified_id_data.csv", path=drive_find(pattern="HML Data", corpus="allDrives"))
+    # Pop up status message and page reload
+    shinyalert::shinyalert('Saved Undo', callbackJS = "function() {location.reload()}")
   }
 })
 
@@ -121,7 +170,8 @@ renderUI(
   HTML(
     if(isTruthy(input$idPick)){
       kable(picked_id_data() %>% select(participant_id:sex),
-            col.names = c("Participant ID", "Mindcrowd ID", "Area", "Age Group", "Sex")) %>%
+            col.names = c("Mindcrowd ID", "Truncated Mindcrowd ID", "Area", "Age Group", "Sex"),
+            align = "c") %>%
         kable_styling(full_width = FALSE)
     }
   )
@@ -186,8 +236,10 @@ renderUI({
       HTML(
         new_data()[which(dat$part_id == input$idPick),] %>%
           remove_rownames() %>%
-          kable(col.names = c("Participant ID", "Mindcrowd ID", "Area", "Age Group", "Sex",
-                              "HML ID", "HML Created Date")) %>%
+          select(-hml_id_undo) %>%
+          kable(col.names = c("Mindcrowd ID", "Truncated Mindcrowd ID", "Area", "Age Group", "Sex",
+                              "HML ID", "HML Created Date"),
+                align = "c") %>%
           kable_styling(full_width = FALSE)
       )
     }
@@ -212,32 +264,50 @@ renderUI(
 
 # Help
 
-App information:
+## Row
 
-This app generates a new HML ID for new participants that qualify for recruitment. 
+Undo HML Assignment:
 
-Data:
+If you assigned a new HML ID by mistake, please select the participants ID from the dropdown menu and press the "Remove" button below.
 
-Currently the app uses local version of data.
+```{r undo hml dropdown}
 
-Last updated: `r format(Sys.time(), "%b %d, %Y %H:%M")`
+# Display IDs from selected area (areaPick) and has an assigned ID
+renderUI({
+  selectInput("idPickUndo", label = "Select the participant's MindCrowd ID.",
+              choices = c("",id_choices_undo()$hml_id), selected = NULL)
+})
 
-<html>
+```
 
-<p>
 
-Copyright ©: `r format(Sys.time(), "%Y")` StatLab, BIO5 ALL RIGHTS RESERVED
+```{r undo hml button}
 
-</p>
+renderUI(
+    if(isTruthy(input$idPickUndo)){
+        actionButton("saveIdUndo", "Undo New HML ID", icon = icon("delete-left"))
+    }
+)
 
-<p>
+```
 
-Developer:
 
-</p>
+<!-- <html> -->
 
-<p>
+<!-- <p> -->
 
-Lisa White, Statistician <br/>
+<!-- Copyright ©: `r format(Sys.time(), "%Y")` StatLab, BIO5 ALL RIGHTS RESERVED -->
 
-</p>
+<!-- </p> -->
+
+<!-- <p> -->
+
+<!-- Developer: -->
+
+<!-- </p> -->
+
+<!-- <p> -->
+
+<!-- Lisa White, Statistician <br/> -->
+
+<!-- </p> -->
