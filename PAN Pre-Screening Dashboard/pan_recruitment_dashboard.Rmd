@@ -31,14 +31,30 @@ library(flexdashboard)
 # Need to use the above to collapse rows properly
 library(kableExtra)
 
+# section to connect to Google Drive
+library(googledrive)
+# file with info for service account 
+googledrive::drive_auth(path = "pan-mindcrowd-uploads-ddf6b0dbe662.json")
+
+# Option to silence the messages coming from the Google Drive library
+options(googledrive_quiet = TRUE)
+
 ```
 
 ```{r load data}
 
+with_drive_quiet(
+  drive_download(as_id("https://drive.google.com/file/d/1EzECr3ExclMk1S_HkwBrE10jGtkKKFcF"), 
+                 overwrite = TRUE)
+)
 load("mindcrowd_screening_data.Rdata")
 
 recruitment <- data
 
+with_drive_quiet(
+  drive_download(as_id("https://drive.google.com/file/d/1Dk4kou56uJIK71qhh4TCE1NDy7_nZLFS"), 
+                 overwrite = TRUE)
+)
 load(paste0("mindcrowd_campaign_codes.Rdata"))
 
 ```
@@ -378,15 +394,13 @@ This app currently displays screening data of participants in the PAN study. All
 
 Data:
 
-Currently the app uses local version of data.
-
 Last updated: `r format(Sys.time(), "%b %d, %Y %H:%M")`
 
 <html>
 
 <p>
 
-Copyright ©: 2022 StatLab, BIO5 ALL RIGHTS RESERVED
+Copyright ©: `r format(Sys.time(), "%Y")` StatLab, BIO5 ALL RIGHTS RESERVED
 
 </p>
 

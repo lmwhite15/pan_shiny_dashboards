@@ -34,6 +34,14 @@ library(flexdashboard)
 library(kableExtra)
 library(openxlsx)
 
+# section to connect to Google Drive
+library(googledrive)
+# file with info for service account 
+googledrive::drive_auth(path = "pan-mindcrowd-uploads-ddf6b0dbe662.json")
+
+# Option to silence the messages coming from the Google Drive library
+options(googledrive_quiet = TRUE)
+
 theme_set(theme_bw())
 
 options(knitr.kable.NA = '')
@@ -41,6 +49,11 @@ options(knitr.kable.NA = '')
 ```
 
 ```{r load data}
+
+with_drive_quiet(
+  drive_download(as_id("https://drive.google.com/file/d/1qa2MeTjZMNQQep4EIPOh0MMKCY2-M8Jc"), 
+                 overwrite = TRUE)
+)
 
 load(file = "pan_games_files_list.Rdata")
 

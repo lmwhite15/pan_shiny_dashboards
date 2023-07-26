@@ -33,11 +33,24 @@ library(flexdashboard)
 # Need to use the above to collapse rows properly
 library(kableExtra)
 
+# section to connect to Google Drive
+library(googledrive)
+# file with info for service account 
+googledrive::drive_auth(path = "pan-mindcrowd-uploads-ddf6b0dbe662.json")
+
+# Option to silence the messages coming from the Google Drive library
+options(googledrive_quiet = TRUE)
+
 theme_set(theme_bw())
 
 ```
 
 ```{r load data}
+
+with_drive_quiet(
+  drive_download(as_id("https://drive.google.com/file/d/1nWhqxGUEH6gHK27YT4Js4f-5rERkLqSa"), 
+                 overwrite = TRUE)
+)
 
 load(file = "pan_survey_files_list.Rdata")
 

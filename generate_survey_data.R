@@ -1,10 +1,24 @@
 
 rm(list = ls())
 
+# Set file locations ---------
+
+setwd("C:/Users/Lisa/Box/pan_dashboard_data/generate_survey_data/")
+
+mindcrowd_folder <- "C:/Users/Lisa/Box/[UA BOX Health] MindCrowd Inbound"
+
 # Load Libraries -------------
 
 library(tidyverse)
 library(openxlsx)
+
+# section to connect to Google Drive
+library(googledrive)
+# file with info for service account 
+googledrive::drive_auth(path = "pan-mindcrowd-uploads-ddf6b0dbe662.json")
+
+# Option to silence the messages coming from the Google Drive library
+options(googledrive_quiet = TRUE)
 
 # Load functions ------------
 
@@ -13,9 +27,6 @@ source("survey_logic_branching.R")
 source("survey_redcap_formatting.R")
 
 # Load data ------------------
-
-## Folder with updated MindCrowd data
-mindcrowd_folder <- "C:/Users/Lisa/Box/[UA BOX Health] MindCrowd Inbound"
 
 ## Recruitment zone zipcodes
 recruitment_zip_codes <- read.csv("recruitment_zip_codes.csv")
@@ -160,8 +171,9 @@ files_list <- lapply(files_list, function(x){
   new_x <- x %>% select(-record_id)
 })
 
-save(names, files_list, survey_data_dictionary, redcap_data,
-     file = "Survey Dashboard/pan_survey_files_list.Rdata")
+save(names, files_list, survey_data_dictionary, redcap_data, file = "pan_survey_files_list.Rdata")
+
+drive_put("pan_survey_files_list.Rdata", path=drive_find(pattern="HML Data", corpus="allDrives"))
 
 print("Saved Survey Dataset!")
 

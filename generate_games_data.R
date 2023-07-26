@@ -3,16 +3,26 @@
 
 rm(list = ls())
 
+# Set file locations ---------
+
+setwd("C:/Users/Lisa/Box/pan_dashboard_data/generate_games_data/")
+
+mindcrowd_folder <- "C:/Users/Lisa/Box/[UA BOX Health] MindCrowd Inbound"
+
 # Load libraries --------------
 
 library(tidyverse)
 library(openxlsx)
 
+# section to connect to Google Drive
+library(googledrive)
+# file with info for service account 
+googledrive::drive_auth(path = "pan-mindcrowd-uploads-ddf6b0dbe662.json")
+
+# Option to silence the messages coming from the Google Drive library
+options(googledrive_quiet = TRUE)
+
 # Load data --------------------
-
-# system_date <- format(Sys.Date(), "%Y-%m-%d")
-
-mindcrowd_folder <- paste0("C:/Users/Lisa/Box/[UA BOX Health] MindCrowd Inbound")
 
 participant_data <- read.csv(paste0(mindcrowd_folder, "/Current/participants.csv")) 
 
@@ -240,7 +250,8 @@ response_files_list[["react"]] <- files_list[["react"]] %>%
 
 redcap_data <- response_files_list
 
-save(names, files_list, redcap_data,
-     file = paste0("Games Dashboard/pan_games_files_list.Rdata"))
+save(names, files_list, redcap_data, file = paste0("pan_games_files_list.Rdata"))
+
+drive_put("pan_games_files_list.Rdata", path=drive_find(pattern="HML Data", corpus="allDrives"))
 
 print("Saved Games Dataset!")

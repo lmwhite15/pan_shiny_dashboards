@@ -1,13 +1,17 @@
 
 rm(list = ls())
 
+# Set file locations ---------
+
+setwd("C:/Users/Lisa/Box/pan_dashboard_data/generate_dashboard_data/")
+
+mindcrowd_folder <- "C:/Users/Lisa/Box/[UA BOX Health] MindCrowd Inbound"
+
 # Load Libraries -------------
 
 library(tidyverse)
 
 source("mindcrowd_data_processing_functions_230322.R")
-
-mindcrowd_folder <- "C:/Users/Lisa/Box/[UA BOX Health] MindCrowd Inbound"
 
 memory_data <- read.csv(paste0(mindcrowd_folder, "/Current/memory.csv"))
 
