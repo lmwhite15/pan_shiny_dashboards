@@ -17,9 +17,6 @@ library(googledrive)
 # file with info for service account 
 googledrive::drive_auth(path = "pan-mindcrowd-uploads-ddf6b0dbe662.json")
 
-# Option to silence the messages coming from the Google Drive library
-options(googledrive_quiet = TRUE)
-
 # Load functions ------------
 
 source("survey_logic_branching.R")
@@ -171,7 +168,8 @@ files_list <- lapply(files_list, function(x){
   new_x <- x %>% select(-record_id)
 })
 
-save(names, files_list, survey_data_dictionary, redcap_data, file = "pan_survey_files_list.Rdata")
+save(names, files_list, survey_data_dictionary, redcap_data,
+     file = "pan_survey_files_list.Rdata")
 
 drive_put("pan_survey_files_list.Rdata", path=drive_find(pattern="HML Data", corpus="allDrives"))
 

@@ -11,6 +11,16 @@ mindcrowd_folder <- "C:/Users/Lisa/Box/[UA BOX Health] MindCrowd Inbound"
 
 library(tidyverse)
 
+# section to connect to Google Drive
+library(googledrive)
+# file with info for service account 
+googledrive::drive_auth(path = "pan-mindcrowd-uploads-ddf6b0dbe662.json")
+
+# Option to silence the messages coming from the Google Drive library
+options(googledrive_quiet = TRUE)
+
+# Wrangle data -------------------
+
 source("mindcrowd_data_processing_functions_230322.R")
 
 memory_data <- read.csv(paste0(mindcrowd_folder, "/Current/memory.csv"))
@@ -26,9 +36,11 @@ data <- screening_data %>%
                           area %in% "baltimore" ~ "Baltimore",
                           area %in% "atlanta" ~ "Atlanta"))
 
-save(data, file = paste0("PAN Pre-Screening Dashboard/mindcrowd_screening_data.Rdata"))
+save(data, file = paste0("mindcrowd_screening_data.Rdata"))
 
-# Save campaign code data
+drive_put("mindcrowd_screening_data.Rdata", path=drive_find(pattern="HML Data", corpus="allDrives"))
+
+# Save campaign code data -----------------
 
 recruitment_zip_codes <- read.csv("recruitment_zip_codes.csv")
 mindcrowd_data$area <- dplyr::case_when(mindcrowd_data$mailing_postalcode %in% recruitment_zip_codes$zip_code[which(recruitment_zip_codes$recruit_location == "tucson")] ~ "Tucson",
@@ -43,7 +55,8 @@ codes <- mindcrowd_data %>%
   mutate(area = ifelse(is.na(area), "Outside Screening Areas", area)) %>%
   select(participant_id, area, campaign_code)
 
-save(codes, 
-     file = paste0("PAN Pre-Screening Dashboard/mindcrowd_campaign_codes.Rdata"))
+save(codes, file = paste0("mindcrowd_campaign_codes.Rdata"))
+
+drive_put("mindcrowd_campaign_codes.Rdata", path=drive_find(pattern="HML Data", corpus="allDrives"))
 
 print("Saved Pre-Screening Dataset!")
