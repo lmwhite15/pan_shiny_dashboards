@@ -34,12 +34,12 @@ raw_participant_data <- read.csv(paste0(mindcrowd_folder, "/Current/participants
 ## Use email to match data to survey data 
 ## (some participant level data doesn't show participant_id so need to use email, hopefully temporary?)
 participant_data <- raw_participant_data %>%
-  mutate(email = toupper(email),
+  mutate(#email = toupper(email),
          area = case_when(mailing_postalcode %in% recruitment_zip_codes$zip_code[which(recruitment_zip_codes$recruit_location == "tucson")] ~ "tucson",
                           mailing_postalcode %in% recruitment_zip_codes$zip_code[which(recruitment_zip_codes$recruit_location == "miami")] ~ "miami",
                           mailing_postalcode %in% recruitment_zip_codes$zip_code[which(recruitment_zip_codes$recruit_location == "baltimore")] ~ "baltimore",
                           mailing_postalcode %in% recruitment_zip_codes$zip_code[which(recruitment_zip_codes$recruit_location == "atlanta")] ~ "atlanta")) %>%
-  select(participant_id, participant_id_parent, area, email, created_date_participant)
+  select(participant_id, participant_id_parent, area, created_date_participant)
 
 ## Survey Data ~~~~~
 
@@ -60,22 +60,23 @@ raw_files_list <- lapply(files,
 
 ## HML Recruited Participant IDs
 ## Using csv from New_HML_IDs folder in Box
-hml_id_files <- list.files(paste0(mindcrowd_folder, "/New_HML_IDs"))
-hml_id_files <- hml_id_files[-which(hml_id_files == "log")]
+hml_id_files <- list.files(paste0(mindcrowd_folder, "/REDCap_ID_Assignment"))
 hml_id_files <- hml_id_files[order(hml_id_files, decreasing = TRUE)]
 
-hml_ids <- read.csv(paste0(mindcrowd_folder, "/New_HML_IDs/", hml_id_files[1])) %>%
-  rename(record_id = REDCap_id, 
-         study_id = HML_id) %>%
-  filter(!str_detect(record_id, "TEST"))
+hml_ids <- read.csv(paste0(mindcrowd_folder, "/REDCap_ID_Assignment/", hml_id_files[1])) %>%
+  rename(record_id = redcap_record_id, 
+         study_id = hml_id) %>%
+  mutate(record_id = as.character(record_id))
 
 ## Match participant data to hml_ids
 hml_participant_data <- hml_ids %>%
-  select(record_id, study_id, participant_id_parent) %>%
   left_join(participant_data, by = "participant_id_parent") %>%
-  group_by(participant_id_parent) %>%
-  arrange(desc(created_date_participant)) %>% slice(1) %>% ungroup() %>% select(-created_date_participant) %>%
-  mutate(area = ifelse(is.na(area), "tucson", area))
+  # Replace any times with missing area observations with another time area
+  group_by(participant_id_parent) %>% fill(area, .direction = "downup") %>%
+  # # Select most recent survey for each participant
+  # group_by(participant_id_parent) %>%
+  # arrange(desc(created_date_participant)) %>% slice(1) %>% ungroup() %>% 
+  select(-created_date_participant)
 
 # Format survey data ----------------------
 
@@ -86,30 +87,37 @@ names(raw_files_list) <- names
 
 files_list <- lapply(raw_files_list, function(x){
   new_x <- x %>%
-    mutate(email = toupper(email)) %>%
-    group_by(email) %>% 
-    arrange(desc(created_date_survey)) %>% 
-    slice(1) %>% 
-    ungroup() %>%
-    rename(survey_participant_id = participant_id) %>%
-    right_join(hml_participant_data, by = "email") %>%
-    mutate(survey_participant_id = ifelse(survey_participant_id == "" | is.na(survey_participant_id),
-                                          participant_id_parent, 
-                                          survey_participant_id)) %>%
-    mutate(survey_participant_id = str_replace(survey_participant_id, ".*(?=0{5})", ""),
-           survey_participant_id = str_replace(survey_participant_id, "0{5}", "")) %>%
+    # mutate(email = toupper(email)) %>%
+    # group_by(email) %>% 
+    # arrange(desc(created_date_survey)) %>% 
+    # slice(1) %>% 
+    # ungroup() %>%
+    # rename(survey_participant_id = participant_id) %>%
+    right_join(hml_participant_data, by = "participant_id") %>%
+    # mutate(survey_participant_id = ifelse(survey_participant_id == "" | is.na(survey_participant_id),
+    #                                       participant_id_parent, 
+    #                                       survey_participant_id)) %>%
+    # mutate(survey_participant_id = str_replace(survey_participant_id, ".*(?=0{5})", ""),
+    #        survey_participant_id = str_replace(survey_participant_id, "0{5}", "")) %>%
     select(record_id, study_id, area, everything(),
            -c(survey_id, email, contains("participant_id"))) %>%
     mutate(across(-created_date_survey, ~ifelse(!is.na(created_date_survey) & is.na(.), "", .))) %>%
-    mutate(created_date_survey = as.Date(created_date_survey))
+    mutate(created_date_survey = as.Date(created_date_survey)) %>%
+    # Select most recent survey for each participant
+    group_by(record_id) %>%
+    arrange(desc(created_date_survey)) %>% slice(1) %>% ungroup()
   if(sum(colnames(new_x) %in% c("Last Modified Date", "Not Listed", "Not.Listed", "Last.Modified.Date")) > 0){
     new_x <- new_x[-which(colnames(new_x) %in% c("Last Modified Date", "Not Listed", "Not.Listed", "Last.Modified.Date"))]
   }
   colnames(new_x)[which(colnames(new_x) == "created_date_survey")] <- paste0(str_replace(colnames(new_x)[ncol(new_x)], "_.*", ""), "_", "timestamp")
   
+  survey_name <- str_extract(names(new_x)[ncol(new_x)], ".*(?=_)")
+  item_list <- names(new_x)[which(str_detect(names(new_x), survey_name) & !endsWith(names(new_x), "timestamp"))]
+  max_item_number <- max(as.numeric(str_extract(item_list, "(?<=\\.)\\d+$")))
+  
   new_x <- new_x %>%
     select(record_id, study_id, area, contains("_timestamp"),
-           paste0(str_extract(names(.)[ncol(.)], ".*(?=_)"), "_v1.0.", 1:(ncol(.)-4))) %>%
+           paste0(str_extract(names(.)[ncol(.)], ".*(?=_)"), "_v1.0.", 1:max_item_number)) %>%
     arrange(as.numeric(record_id))
   
   new_x
