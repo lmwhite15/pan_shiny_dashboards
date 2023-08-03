@@ -93,3 +93,10 @@ write.csv(updated_dat, file = "deidentified_id_data.csv",
 drive_put("deidentified_id_data.csv", path=drive_find(pattern="HML Data", corpus="allDrives"))
 
 print("Saved updated data to app folder.")
+
+# Move the participant_id_parent and hml_ids to the REDCap ID upload folder
+
+write.csv(filter(updated_dat, !is.na(hml_id)), file = paste0(mindcrowd_folder, "/HML_ID_Assignment/hml_id_data.csv"),
+          row.names = F)
+
+print("Saved updated data to REDCap ID creation folder.")
