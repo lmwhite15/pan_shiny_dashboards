@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "pan-mindcrowd-uploads",
+  "private_key_id": "ddf6b0dbe662f166551db88ebda7c0c9f366fcd8",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC0Py9/g/2Jifvt\ne/E8P3t0wuF4zRAeeWAJ2M1z8Xvc3KQJaPsj3vaozpBHnb91tggcf5Z4QyxEDju6\nrdXi0gUzPA7wivvNsh35FzYFYhO/JWZ62+rTI/9+xwHAqBSPpujotvD2Pz2ZEoya\niIrV6hFx5AFxFHHhZ9I2KuPt7k2q6YEiyTqDEZbb1Ou3Pc9lzD88bPLsQz0Ek49k\nMEUFZlfHfqEk+Xub/e7FZbVf1Gcpp84dnRmahSCWK1C0NCExJR0N57Bwv5fqgD9b\nDGkFPJ4C1f+qz3TxAhjfBhOYWxmbBAXFoySJLdWLeB1YLY8qPvo4e6SPT/723z2o\nPd1XqupDAgMBAAECggEARAl9wmJuN5aQM+qO+rDzxvUw6sptBTPHnq/pjZRfrtTS\nToMEGVw2Oy4NpBrVhHc7xJYclDS25tGAlky76axhLh/De+Tae6B6U+YBDDMjRQm3\nDzUoBJ8X+CDidnh7mmXkkMNNXYYtmDQ6QrK7xVdfUmBAcxDGk9D+tlemRc+oHZT4\naCixOoEuSJLnqI/Xx2683SVGKw/RPa5CKEbePlvh9gVgbWF8sTlkjg+q1l8+TSFz\n9oM2ddetD/zr5oegd2Bpvr7T+IlAJdBCSCG6KbCZhiXpHZ7IL4wSO3phYo3gXMTc\ngdCv2/vyMD0hcV1qbUUOY0+k/O3uTgidf2UBUWNDsQKBgQDbJtOm+o2eBW5JxmVZ\nn/ScYrEh/KnlgAMuXfgFnx6o7G8WKgD5rk1qW5HD/2T57WER4u9SaXk29MqctATY\nzzPeLAENU8S9dPzkXO7KtgAuoT7Km/Uj+UTgBDEeLP5PKETKreJ6ib0AkIkc51nD\nJqzWY4vqmQ6FOf3puucgd/DQhwKBgQDSjbylPMgD6bLl9NMTSKQzhejmr1XTT6r5\n6CLx9bADR4TzqE7lSXVuC7Iyl5zEQxaP8C2yEeAmZmRI663QNLsxxPClpRHxq4HS\nqHjJA2UM8GJqxXZvXjpBHhcovO/FTwg8fkCDH0D/51c2w9VvI80hMxDMBj61x6dc\nVHdekyRzZQKBgCeVCrNlG8EH4BSpJdMbRfYdCTtHRHR0O57bUBnL1KDUG3hYW9a8\n+bSVF23cKiPOETNG1sz+yer4KcRF634xZn/hWMtMbwN9JtQkSOkKGFxTuWCk7JDz\ny9HeT/TQUZqAfnRRFc/mIuIAOROkYZ0S1jLexf24aVv8znSx0l8V6sPvAoGAWeSB\ngdptWp5P7rWT2EvPLuAhCzwYXFtLF97v7HWEbCIAtTZKWMIADLeZoNfx6ijqXRGh\nsMDI/hwA/NECKD4bHaiDRXUwMAmVJ6cdylRUtC19FzCu2+VS4bJDGPVxOMABODJ+\nwHx7d8YBCjSZzxVt4pq2tSSFaX6QCW9Wd15C1bECgYBgYWLu6Dyfj+OtNLBGErSw\n1ml8sbuQDc9ahOIIHVBqNgH4nS66moF9V5px9OVupd3FaLjyYOVmputk5hgcnviU\n5xaQBZ1ivfKO8RfeKXLUwncQCaUk0k2X4JuT85P26fTcr1xupicOkmQqVxNdxo97\nVxg9XlBKGrJNnyUsGjxGow==\n-----END PRIVATE KEY-----\n",
+  "client_email": "pan-svc-account@pan-mindcrowd-uploads.iam.gserviceaccount.com",
+  "client_id": "114141015919227983359",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/pan-svc-account%40pan-mindcrowd-uploads.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

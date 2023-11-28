@@ -40,6 +40,18 @@ save(data, file = paste0("mindcrowd_screening_data.Rdata"))
 
 drive_put("mindcrowd_screening_data.Rdata", path=drive_find(pattern="HML Data", corpus="allDrives"))
 
+# Save all ID data
+
+all_screening_data <- create_screening_data(mindcrowd_data, memory_data, dag_area = "Raw")
+
+all_screening_data <- subset(all_screening_data, 
+                             select = c(participant_id_parent, participant_id, 
+                                        sex, age_group, race, hispanic_latino, task_group))
+
+save(all_screening_data, file = paste0("all_screening_data.Rdata"))
+
+drive_put("all_screening_data.Rdata", path=drive_find(pattern="HML Data", corpus="allDrives"))
+
 # Save campaign code data -----------------
 
 recruitment_zip_codes <- read.csv("recruitment_zip_codes.csv")

@@ -59,11 +59,12 @@ raw_files_list <- lapply(files,
                          function(x){read.csv(x) %>% mutate_all(~ifelse(. == "", NA, .))})
 
 ## HML Recruited Participant IDs
-## Using csv from New_HML_IDs folder in Box
+## Using csv from REDCap ID Assignment folder in Box
 hml_id_files <- list.files(paste0(mindcrowd_folder, "/REDCap_ID_Assignment"))
-hml_id_files <- hml_id_files[order(hml_id_files, decreasing = TRUE)]
 
-hml_ids <- read.csv(paste0(mindcrowd_folder, "/REDCap_ID_Assignment/", hml_id_files[1])) %>%
+hml_ids <- do.call(rbind, 
+                   lapply(paste0(mindcrowd_folder, "/REDCap_ID_Assignment/", hml_id_files), 
+                          read.csv)) %>%
   rename(record_id = redcap_record_id, 
          study_id = hml_id) %>%
   mutate(record_id = as.character(record_id))
@@ -72,7 +73,7 @@ hml_ids <- read.csv(paste0(mindcrowd_folder, "/REDCap_ID_Assignment/", hml_id_fi
 hml_participant_data <- hml_ids %>%
   left_join(participant_data, by = "participant_id_parent") %>%
   # Replace any times with missing area observations with another time area
-  group_by(participant_id_parent) %>% fill(area, .direction = "downup") %>%
+  group_by(participant_id_parent) %>% fill(area, .direction = "downup") %>% ungroup() %>%
   # # Select most recent survey for each participant
   # group_by(participant_id_parent) %>%
   # arrange(desc(created_date_participant)) %>% slice(1) %>% ungroup() %>% 
@@ -86,19 +87,8 @@ hml_participant_data <- hml_ids %>%
 names(raw_files_list) <- names
 
 files_list <- lapply(raw_files_list, function(x){
-  new_x <- x %>%
-    # mutate(email = toupper(email)) %>%
-    # group_by(email) %>% 
-    # arrange(desc(created_date_survey)) %>% 
-    # slice(1) %>% 
-    # ungroup() %>%
-    # rename(survey_participant_id = participant_id) %>%
-    right_join(hml_participant_data, by = "participant_id") %>%
-    # mutate(survey_participant_id = ifelse(survey_participant_id == "" | is.na(survey_participant_id),
-    #                                       participant_id_parent, 
-    #                                       survey_participant_id)) %>%
-    # mutate(survey_participant_id = str_replace(survey_participant_id, ".*(?=0{5})", ""),
-    #        survey_participant_id = str_replace(survey_participant_id, "0{5}", "")) %>%
+  new_x <- hml_participant_data %>%
+    left_join(x, by = "participant_id") %>%
     select(record_id, study_id, area, everything(),
            -c(survey_id, email, contains("participant_id"))) %>%
     mutate(across(-created_date_survey, ~ifelse(!is.na(created_date_survey) & is.na(.), "", .))) %>%
@@ -179,7 +169,7 @@ files_list <- lapply(files_list, function(x){
 save(names, files_list, survey_data_dictionary, redcap_data,
      file = "pan_survey_files_list.Rdata")
 
-drive_put("pan_survey_files_list.Rdata", path=drive_find(pattern="HML Data", corpus="allDrives"))
+drive_update("pan_survey_files_list.Rdata", path=drive_find(pattern="HML Data", corpus="allDrives"))
 
 print("Saved Survey Dataset!")
 

@@ -60,12 +60,10 @@ create_screening_data <- function(mindcrowd_data, memory_data, dag_area = "All",
   
   # Select variables for filtering participants and merge datasets ---------------------------------------------
   
-  if(dag_area == "US"){
+  if(dag_area == "Raw"){
     mindcrowd_data_subset <- subset(mindcrowd_data,
-                                    contactable %in% c(TRUE, "True"),
-                                    mailing_country == "United States",
-                                    select = c(participant_id, participant_id_parent, email, mailing_postalcode, contactable,
-                                               area, sex, race, race_group, age, age_group, highest_education_level_completed))
+                                    select = c(participant_id, participant_id_parent, area, 
+                                               sex, race, hispanic_latino, age, age_group, highest_education_level_completed))
   }else{
     if(campaign_code){
       mindcrowd_data_subset <- subset(mindcrowd_data,
@@ -88,12 +86,17 @@ create_screening_data <- function(mindcrowd_data, memory_data, dag_area = "All",
                         select = c(participant_id, created_at, totalcorrect))
   
   # Merge participant demographics with memory test data
-  combined_data <- merge(mindcrowd_data_subset, memory_data_subset, by = "participant_id") 
-  
-  # Filter latest test taken by participant ID parent
-  combined_data_parent <- combined_data[order(combined_data$created_at),]
-  combined_data_parent <- aggregate(combined_data_parent, list(combined_data_parent$participant_id_parent), tail, 1)
-  combined_data_parent <- combined_data_parent[-which(names(combined_data_parent) == "Group.1")]
+  if(dag_area == "Raw"){
+    combined_data_parent <- merge(mindcrowd_data_subset, memory_data_subset, by = "participant_id", all.x = T)
+    
+  }else{
+    combined_data <- merge(mindcrowd_data_subset, memory_data_subset, by = "participant_id") 
+    
+    # Filter latest test taken by participant ID parent
+    combined_data_parent <- combined_data[order(combined_data$created_at),]
+    combined_data_parent <- aggregate(combined_data_parent, list(combined_data_parent$participant_id_parent), tail, 1)
+    combined_data_parent <- combined_data_parent[-which(names(combined_data_parent) == "Group.1")]
+  }
   
   # Assigning performance groups --------------------------------------------------------
   
@@ -125,15 +128,25 @@ create_screening_data <- function(mindcrowd_data, memory_data, dag_area = "All",
   
   # Selecting individuals eligible for recruitment --------------------------------------------------------
   
-  screening_data <- subset(performance_grouped_data, 
-                          !is.na(race_group) & !is.na(task_group) &
-                          age_group %in% c("50-59", "60-69", "70-79"))
+  
   
   # Filter for the correct DAG,if one is specified.
   # If DAG is 'Unknown' then no records will be returned.
   # If DAG is 'All' then no DAG filtering will be done.
   if (dag_area != 'All') {
-    screening_data <- subset(screening_data, area %in% dag_area)
+    if(dag_area == "Raw"){
+      screening_data <- performance_grouped_data
+    }else{
+      screening_data <- subset(performance_grouped_data, 
+                               !is.na(race_group) & !is.na(task_group) &
+                                 age_group %in% c("50-59", "60-69", "70-79"))
+      
+      screening_data <- subset(screening_data, area %in% dag_area)
+    }
+  }else{
+    screening_data <- subset(performance_grouped_data, 
+                             !is.na(race_group) & !is.na(task_group) &
+                               age_group %in% c("50-59", "60-69", "70-79"))
   }
   
   return(screening_data)

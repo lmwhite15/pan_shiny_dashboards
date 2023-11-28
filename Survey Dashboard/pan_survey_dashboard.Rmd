@@ -66,8 +66,9 @@ complete_files_list <- lapply(files_list, function(x){
              rowSums(na.rm = T),
            completed = ifelse(!is.na(select(., ends_with("_timestamp"))) & missing == 0, "Completed", "Not Completed")) %>%
     select(study_id, area, completed, everything(), -missing) %>%
-  rename(!!paste0(str_extract(names(.)[ncol(.)], ".*(?=_)"), "_completed") := completed)
-    
+    rename(!!paste0(str_extract(names(.)[ncol(.)], ".*(?=_)"), "_completed") := completed) %>%
+    filter(!is.na(area) & area != "")
+  
   new_x
 })
 
@@ -94,10 +95,9 @@ overall_attempted_table <- overall_attempted %>%
                names_to = "survey",
                values_to = "missing") %>%
   group_by(survey, .add = T) %>%
-  summarise(number_missing = sum(missing),
+  reframe(number_missing = sum(missing),
             percent_missing = sum(missing)/nrow * 100,
-            total_surveys = nrow,
-            .groups = "keep") %>%
+            total_surveys = nrow) %>%
   distinct() %>%
   mutate(survey = str_replace(survey, "_.*", "")) %>%
   ungroup()
@@ -108,7 +108,8 @@ for(i in 2:length(files_list)){
   overall_attempted_time <- merge(overall_attempted_time,
                              files_list[[i]][1:3],
                              all = T,
-                             by = c("study_id", "area"))
+                             by = c("study_id", "area"))%>%
+    filter(!is.na(area) & area != "")
 }
 
 ```
