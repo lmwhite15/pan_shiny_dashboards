@@ -34,7 +34,7 @@ library(openxlsx)
 # section to connect to Google Drive
 library(googledrive)
 # file with info for service account
-drive_auth(path = "pan-mindcrowd-uploads-ddf6b0dbe662.json")
+drive_auth(path = "pan-mindcrowd-uploads-d9b7ecb93e53.json")
 # Option to silence the messages coming from the Google Drive library
 options(googledrive_quiet = TRUE)
 
@@ -119,7 +119,7 @@ id_choices <- reactive(
 
 # Filter data by selected ID idPick -------
 picked_id_data <- reactive(
-  filter(dat, participant_id == input$idPick)
+  filter(dat, participant_id == input$idPick & area == input$areaPick)
 )
 
 # Create new ID and add to dataset for confirmation -------
@@ -204,15 +204,16 @@ id_data <- eventReactive(input$data_up, {
   req(input$data_up)
   
   id_data <- ifelse(tools::file_ext(input$data_up$datapath) == "csv",
-                    read.csv(input$data_up$datapath),
-                    read.xlsx(input$data_up$datapath))
+                    read.csv(input$data_up$datapath, col.names = FALSE),
+                    read.xlsx(input$data_up$datapath, colNames = FALSE))
 })
 
 # Add new HML IDs ------------
 new_id_data <- reactive({
   id_data <- data.frame(id_data())
   
-  # id_data <- read.csv("submit_format.csv")
+  # Detect variable name and remove row if present
+  if(!str_detect(id_data[1,1], "[0:9]")) id_data <- as.data.frame(id_data[-1,])
   
   id_data <- rename(id_data, "id" = 1)
   
@@ -509,3 +510,17 @@ renderUI(
 )
 
 ```
+
+---
+
+# Help
+
+## Row
+
+```{r}
+# 08-Feb-24: Added Help tab
+tags$iframe(style = "height:850px; width:100%; scrolling=yes",
+            src = "HML ID generation application_Help Document Version2_2023-08-23.pdf")
+
+```
+

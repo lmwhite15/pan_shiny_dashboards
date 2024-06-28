@@ -35,19 +35,19 @@ library(kableExtra)
 library(openxlsx)
 
 # # section to connect to Google Drive
-# library(googledrive)
-# # file with info for service account 
-# googledrive::drive_auth(path = "pan-mindcrowd-uploads-ddf6b0dbe662.json")
-# 
+library(googledrive)
+# file with info for service account
+googledrive::drive_auth(path = "pan-mindcrowd-uploads-d9b7ecb93e53.json")
+
 # Option to silence the messages coming from the Google Drive library
-# options(googledrive_quiet = TRUE)
+options(googledrive_quiet = TRUE)
 
-library(jsonlite)
-library(RCurl)
-
-json_data <- fromJSON("keys.json")
-logininfo <- json_data$userpwd
-hmlfile <- "ftps://ftp.box.com/[UA%20BOX%20Health]%20MindCrowd%20Inbound/HML_ID_Assignment/hml_id_data.csv"
+# library(jsonlite)
+# library(RCurl)
+# 
+# json_data <- fromJSON("keys.json")
+# logininfo <- json_data$userpwd
+# hmlfile <- "ftps://ftp.box.com/[UA%20BOX%20Health]%20MindCrowd%20Inbound/HML_ID_Assignment/hml_id_data.csv"
 
 theme_set(theme_bw())
 
@@ -58,32 +58,38 @@ options(knitr.kable.NA = '')
 ```{r load data}
 
 with_drive_quiet(
-  drive_download(as_id("https://drive.google.com/file/d/1qa2MeTjZMNQQep4EIPOh0MMKCY2-M8Jc"),
+  drive_download(as_id("https://drive.google.com/file/d/1n4LtM6Z3YzmP40K5Vpm4asdCaRcbjcdY"),
                  overwrite = TRUE)
 )
 load(file = "pan_games_files_list.Rdata")
 
-dat <- read.csv(textConnection(getURL(hmlfile, userpwd=logininfo, ftp.ssl=TRUE)), header = T)
+# 02-May-24: Google drive changed link to data from 1qa2MeTjZMNQQep4EIPOh0MMKCY2-M8Jc to 1n4LtM6Z3YzmP40K5Vpm4asdCaRcbjcdY
+
+# dat <- read.csv(textConnection(getURL(hmlfile, userpwd=logininfo, ftp.ssl=TRUE)), header = T)
 
 ```
 
 ```{r overall game calculations}
 
 overall_attempted <- files_list[[1]] %>%
-  select(participant_id, area, contains("game_status"), contains("timestamp"))
+  select(study_id, area, contains("game_status"), contains("timestamp")) %>%
+  group_by(study_id) %>% arrange(.[3]) %>% slice(1) %>% ungroup()
 
 for(i in 2:length(files_list)){
   
+  game_data <- files_list[[i]] %>% 
+    select(study_id, contains("game_status"), contains("timestamp")) %>%
+    group_by(study_id) %>% arrange(.[3]) %>% slice(1) %>% ungroup()
+  
   overall_attempted <- merge(overall_attempted,
-                             files_list[[i]] %>%
-                               select(participant_id, area, contains("game_status"), contains("timestamp")),
+                             game_data,
                              all = T,
-                             by = c("participant_id", "area"))
+                             by = c("study_id"))
 }
 
 overall_attempted_table <- overall_attempted %>%
   rbind(overall_attempted %>% mutate(area = "All")) %>%
-  select(-participant_id) %>%
+  select(-study_id) %>%
   select(-contains("timestamp")) %>%
   mutate(area = str_to_title(area)) %>%
   mutate(across(-area, ~ifelse(is.na(.) | . == "Not-Compeleted", 1, 0))) %>%
@@ -92,10 +98,9 @@ overall_attempted_table <- overall_attempted %>%
                names_to = "game",
                values_to = "missing") %>%
   group_by(game, .add = T) %>%
-  summarise(number_missing = sum(missing),
+  reframe(number_missing = sum(missing),
             percent_missing = sum(missing)/nrow * 100,
-            total_games = nrow,
-            .groups = "keep") %>%
+            total_games = nrow) %>%
   ungroup() %>%
   distinct() %>%
   mutate(game = str_replace(game, "_game_status", ""),
@@ -103,6 +108,11 @@ overall_attempted_table <- overall_attempted %>%
                           game == "objects_spatial" ~ "Objects & Spaces",
                           game == "objects_temporal" ~ "Objects & Time",
                           TRUE ~ str_to_title(str_replace(game, "_", " "))))
+
+overall_time <- overall_attempted %>%
+  select(contains("timestamp")) %>%
+  pivot_longer(cols = everything()) %>%
+  arrange(desc(value))
 
 ```
 
@@ -124,11 +134,12 @@ plot_function <- function(game = "All"){
     if(game == "attention"){ # Look at Attention game
       files_list[["attention"]] %>%
         rbind(files_list[["attention"]] %>% mutate(area = "All")) %>%
-        filter(attention_game_status == "Completed") %>%
+        filter(attention_game_status == "Completed",
+               attnRT_median != "") %>%
         mutate(area = str_to_title(area),
                area = factor(area,
                              levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
-        ggplot(aes(x = area, y = attnRT_median)) +
+        ggplot(aes(x = area, y = as.numeric(attnRT_median))) +
         geom_boxplot(outlier.shape = NA, lwd = 1) +
         geom_jitter(width = 0.25, height = 0, alpha = 0.5, color = "#224A7B", size = 2) +
         labs(x = "Area", y = "Median Reaction Time") +
@@ -168,12 +179,14 @@ table_function <- function(picked_area = "All", game = "All", picked_id = "All")
         kable_styling(full_width = F)
     }else{ # Look at a specific game for all areas
       if(game == "attention"){
-        files_list[[game]] %>%
-          rbind(files_list[[game]] %>% mutate(area = "All")) %>%
-          filter(attention_game_status == "Completed") %>%
+        files_list[["attention"]] %>%
+          rbind(files_list[["attention"]] %>% mutate(area = "All")) %>%
+          filter(attention_game_status == "Completed",
+                 attnRT_median != "") %>%
           mutate(area = str_to_title(area),
                  area = factor(area,
-                               levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
+                               levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All")),
+                 attnRT_median = as.numeric(attnRT_median)) %>%
           select(area, attnRT_median) %>%
           group_by(area) %>%
           summarise(mean_sd = paste0(round(mean(attnRT_median, na.rm = T), 1), " (", 
@@ -212,8 +225,8 @@ table_function <- function(picked_area = "All", game = "All", picked_id = "All")
           kable_styling(full_width = F)
       }else{ # Look at list of completed games for a participant
         overall_attempted %>%
-          filter(participant_id == picked_id) %>%
-          select(-c(participant_id, area)) %>%
+          filter(study_id == picked_id) %>%
+          select(-c(study_id, area)) %>%
           rename_all(~str_remove(., "_game")) %>%
           pivot_longer(cols =  everything(),
                        names_to = c("game", ".value"),
@@ -232,8 +245,8 @@ table_function <- function(picked_area = "All", game = "All", picked_id = "All")
     }else{
       # Look at specific answers for a participant
       files_list[[game]] %>%
-        filter(participant_id == picked_id) %>%
-        select(-c(participant_id, area, game_result, game_name, browser_useragent,
+        filter(study_id == picked_id) %>%
+        select(-c(study_id, area, game_result, game_name, browser_useragent,
                   user_agent, latitude, longitude, ip_address, language, tz_offset,
                   zip_code, user_device)) %>%
         mutate_all(as.character) %>%
@@ -254,11 +267,15 @@ table_function <- function(picked_area = "All", game = "All", picked_id = "All")
 download_data_function <- function(picked_id){
   
   redcap_data_participant <- lapply(redcap_data, function(x){
-    new_x <- filter(x, participant_id == picked_id)
+    new_x <- filter(x, study_id == picked_id)
     new_x
   })
   
 }
+
+
+redcap_data_participant <- lapply(redcap_data, function(x){
+    new_x <- filter(x, study_id == "HML0104")})
 
 output$downloadDataTucson <- downloadHandler(
   filename = function(){
@@ -306,7 +323,7 @@ output$downloadDataMiami <- downloadHandler(
 {.sidebar}
 ===================
 
-<br>
+#### Data updated: `r games_update_date`.
 
 ```{r select game input}
 
@@ -380,7 +397,7 @@ Row
 ```{r select id for tucson}
 
 selectInput("idPick_tucson", label = "Select a participant ID to view game information.",
-            choices = c(files_list[[1]]$participant_id[files_list[[1]]$area == "tucson"]))
+            choices = c(files_list[[1]]$study_id[files_list[[1]]$area == "tucson"]))
 
 renderUI({downloadButton("downloadDataTucson", "Download Participant Data")})
 
@@ -424,7 +441,7 @@ Row
 ```{r select id for atlanta}
 
 selectInput("idPick", label = "Select a participant ID to view game information.",
-            choices = c(files_list[[1]]$participant_id[files_list[[1]]$area == "atlanta"]))
+            choices = c(files_list[[1]]$study_id[files_list[[1]]$area == "atlanta"]))
 
 renderUI({downloadButton("downloadDataAtlanta", "Download Participant Data")})
 
@@ -468,7 +485,7 @@ Row
 ```{r select id for baltimore}
 
 selectInput("idPick_baltimore", label = "Select a participant ID to view game information.",
-            choices = c(files_list[[1]]$participant_id[files_list[[1]]$area == "baltimore"]))
+            choices = c(files_list[[1]]$study_id[files_list[[1]]$area == "baltimore"]))
 
 renderUI({downloadButton("downloadDataBaltimore", "Download Participant Data")})
 
@@ -512,7 +529,7 @@ Row
 ```{r select id for miami}
 
 selectInput("idPick_miami", label = "Select a participant ID to view game information.",
-            choices = c(files_list[[1]]$participant_id[files_list[[1]]$area == "miami"]))
+            choices = c(files_list[[1]]$study_id[files_list[[1]]$area == "miami"]))
 
 renderUI({downloadButton("downloadDataMiami", "Download Participant Data")})
 
@@ -542,36 +559,3 @@ shiny::renderUI(
 
 
 ```
-
-
-# Help
-
-App information:
-
-This app displays summaries of game completion.
-
-Data:
-
-Currently the app uses local version of data.
-
-Last updated: `r format(Sys.time(), "%b %d, %Y %H:%M")`
-
-<html>
-
-<p>
-
-Copyright ©: 2023 StatLab, BIO5 ALL RIGHTS RESERVED
-
-</p>
-
-<p>
-
-Developer:
-
-</p>
-
-<p>
-
-Lisa White, Statistician <br/>
-
-</p>

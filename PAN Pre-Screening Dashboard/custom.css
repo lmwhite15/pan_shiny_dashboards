@@ -33,5 +33,7 @@
   }
   
              
-
+.image-container {
+  background-position: center top !important;
+}
 

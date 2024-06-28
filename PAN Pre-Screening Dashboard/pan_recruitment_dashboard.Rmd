@@ -1,5 +1,5 @@
 ---
-title: "Recruitment and Retention"
+title: "Participant Tracking"
 output: 
   flexdashboard::flex_dashboard:
     vertical_layout: scroll
@@ -27,6 +27,7 @@ editor_options:
 library(tidyverse)
 library(shiny)
 library(flexdashboard)
+library(plotly)
 # devtools::install_github(repo="haozhu233/kableExtra", ref="a6af5c0")
 # Need to use the above to collapse rows properly
 library(kableExtra)
@@ -34,7 +35,7 @@ library(kableExtra)
 # section to connect to Google Drive
 library(googledrive)
 # file with info for service account 
-googledrive::drive_auth(path = "pan-mindcrowd-uploads-ddf6b0dbe662.json")
+googledrive::drive_auth(path = "pan-mindcrowd-uploads-d9b7ecb93e53.json")
 
 # Option to silence the messages coming from the Google Drive library
 options(googledrive_quiet = TRUE)
@@ -49,369 +50,323 @@ with_drive_quiet(
 )
 load("mindcrowd_screening_data.Rdata")
 
-recruitment <- data
+# Mindcrowd Prescreen population
+prescreen_data <- data %>%
+  rename(paired_associates = task_group) %>%
+  mutate(# Create quarter time variable:
+    day_time = as.Date(created_at, format = "%Y-%m-%d"),
+    quarter_time = paste0(format(day_time, "%Y"), " ", quarters(day_time)))
 
 with_drive_quiet(
-  drive_download(as_id("https://drive.google.com/file/d/1Dk4kou56uJIK71qhh4TCE1NDy7_nZLFS"), 
+  drive_download(as_id("https://drive.google.com/file/d/19n2UvCBF375vVU1bGhVWht7rqZd1uNl0"), 
                  overwrite = TRUE)
 )
-load(paste0("mindcrowd_campaign_codes.Rdata"))
+load("hml_redcap_data.Rdata")
+
+all_mindcrowd_data <- mutate(all_mindcrowd_data,
+                             race_group = ifelse(race_group == "Hispanic", "Hispanic/Latino", race_group))
+prescreen_data <- mutate(prescreen_data,
+                             race_group = ifelse(race_group == "Hispanic", "Hispanic/Latino", race_group))
 
 ```
 
+```{r descriptive functions}
 
-
-```{r descriptive tables}
-
-# Overall recruitment
-overall_table <- recruitment %>%
-  select(area, race_group, age_group, task_group) %>%
-  rbind(recruitment %>% 
-          select(area, race_group, age_group, task_group) %>%
-          mutate(area = "Total")) %>%
-  group_by(area, race_group, age_group) %>%
-  summarise(n = n()) %>%
-  ungroup() %>%
-  complete(age_group, race_group, area, fill = list(n = 0)) %>%
-  pivot_wider(id_cols = c(race_group, age_group),
-              names_from = area,
-              values_from = n)  %>%
-  select(Age = age_group, `Race/Ethnicity` = race_group,
-         Atlanta, Baltimore,  Miami, Tucson, Total) %>%
-  arrange(Age, `Race/Ethnicity`) %>%
-  mutate(across(where(is.factor), as.character)) %>%
-  rbind(., c("Total", "", colSums(.[-(1:2)]))) %>%
-  as.data.frame() %>%
-  kable() %>% 
-  kable_styling(full_width = F) %>%
-  # column_spec(7,border_left = T) %>%
-  # row_spec(9, extra_css = "border-bottom: 1px solid") %>%
-  collapse_rows(columns = 1:2, valign = "top") %>%
-  scroll_box(width = "100%", height = "800px")
-
-# Overall recruitment by sex
-gender_table <- recruitment %>%
-  select(area, age_group, sex) %>%
-  rbind(recruitment %>% 
-          select(area, age_group, sex) %>%
-          mutate(sex = "Total")) %>%
-  group_by(sex, age_group, area) %>%
-  summarise(n = n()) %>%
-  ungroup() %>%
-  complete(age_group, area, sex, fill = list(n = 0)) %>%
-  pivot_wider(id_cols = c(age_group, area),
-              names_from = sex,
-              values_from = n)  %>%
-  select(Age = age_group, Area = area, 
-         Male, Female, Total) %>%
-  arrange(Age, Area) %>%
-  mutate(across(where(is.factor), as.character)) %>%
-  rbind(., c("Total", "", colSums(.[-(1:2)]))) %>%
-  kable() %>% 
-  kable_styling(full_width = F) %>%
-  # column_spec(8,border_left = T) %>%
-  # row_spec(18, extra_css = "border-bottom: 1px solid") %>%
-  collapse_rows(columns = 1:2, valign = "top") %>%
-  scroll_box(width = "100%", height = "800px")
-
-# Split by area
-city_table <- recruitment %>%
-  select(area, race_group, age_group, task_group) %>%
-  rbind(recruitment %>% 
-          select(area, race_group, age_group, task_group) %>%
-          mutate(area = "Total")) %>%
-  group_by(area, race_group, age_group, task_group) %>%
-  summarise(n = n()) %>%
-  ungroup() %>%
-  complete(age_group, race_group, task_group, area, fill = list(n = 0)) %>%
-  pivot_wider(id_cols = c(race_group, age_group, task_group),
-              names_from = area,
-              values_from = n) %>%
-  mutate(across(Atlanta:Tucson, ~ifelse(is.na(.), 0, .))) %>%
-  select(Age = age_group, `Race/Ethnicity` = race_group,  Performance = task_group, 
-         Atlanta, Baltimore,  Miami, Tucson, Total) %>%
-  arrange(Age, `Race/Ethnicity`, `Performance`) %>%
-  mutate(across(where(is.factor), as.character)) %>%
-  rbind(., c("Total", "", "", colSums(.[-(1:3)]))) %>%
-  kable() %>% 
-  kable_styling(full_width = F) %>%
-  # column_spec(8,border_left = T) %>%
-  # row_spec(27, extra_css = "border-bottom: 1px solid") %>%
-  collapse_rows(columns = 1:2, valign = "top") %>%
-  scroll_box(width = "100%", height = "800px")
-
-# Split by test quantile
-test_table <- recruitment %>%
-  select(area, race_group, age_group, task_group) %>%
-  rbind(recruitment %>% 
-          select(area, race_group, age_group, task_group) %>%
-          mutate(task_group = "Total")) %>%
-  group_by(area, race_group, age_group, task_group) %>%
-  summarise(n = n()) %>%
-  ungroup() %>%
-  complete(age_group, race_group, task_group, area, fill = list(n = 0)) %>%
-  mutate(task_group = factor(str_to_title(task_group),
-                             levels = c("Q2", "Q3", "Q4", "Total"))) %>%
-  pivot_wider(id_cols = c(race_group, age_group, area),
-              names_from = task_group,
-              values_from = n) %>%
-  mutate(across(Q2:Total, ~ifelse(is.na(.), 0, .))) %>%
-  arrange(area, age_group, race_group) %>%
-  select(Location = area, Age = age_group, `Race/Ethnicity` = race_group,
-         everything()) %>%
-  mutate(across(where(is.factor), as.character)) %>%
-  rbind(., c("Total", "", "", colSums(.[-(1:3)]))) %>%
-  kable() %>% 
-  kable_styling(full_width = F) %>%
-  # column_spec(7,border_left = T) %>%
-  # row_spec(36, extra_css = "border-bottom: 1px solid") %>%
-  collapse_rows(columns = 1:2, valign = "top") %>%
-  scroll_box(width = "100%", height = "800px")
-
-```
-
-```{r campaign code table}
-
-campaign_data <- data %>% 
-  filter(campaign_code != "" & !is.na(campaign_code)) %>%
-  mutate(campaign_code = toupper(campaign_code))
-
-campaign_table <- campaign_data %>%
-  count(campaign_code, race_group, age_group, area) %>%
-  complete(campaign_code, race_group, age_group, area, fill = list(n = 0))  %>%
-  mutate(race_age = paste(race_group, age_group)) %>%
-  select(-c(age_group, race_group)) %>%
-  pivot_wider(id_cols = c(area,campaign_code),
-              names_from = race_age,
-              values_from = n) %>%
-  mutate(across(-campaign_code, ~ifelse(is.na(.), 0, .))) %>%
-  arrange(area,campaign_code) %>%
-  mutate(Total = rowSums(across(where(is.numeric)))) %>%
-  filter(Total != 0) %>%
-  rbind(c("Total", "", colSums(select(., -c(area, campaign_code))))) %>%
-  kable(col.names = c("Area", "Campaign Code",
-                      rep(c("50-59", "60-69", "70-79"), 3),
-                      "Total")) %>%
-  kable_styling(full_width = F) %>%
-  collapse_rows(columns = 1)%>%
-  add_header_above(c(" " = 2, "Hispanic" = 3, "Non-Hispanic Black" = 3, "Non-Hispanic White"  = 3, " " = 1)) %>%
-  scroll_box(width = "100%", height = "800px")
+# vars = variables to stratify counts by area and overall
+table_function <- function(data, vars = NULL){
   
+  # Get total participants by area
+  site_counts <- count(data, area) %>% arrange(area)
+  
+  if(!is.null(vars)){
+    
+    totals <- c("Total", rep("", length(vars)-1), site_counts$n, sum(site_counts$n, na.rm = TRUE))
+    
+    table_data <- data %>%
+      select(area, all_of(vars)) %>%
+      # Replace any missing factor levels with "Missing"
+      mutate(across(everything(), ~ifelse(. == "", "Missing", as.character(.)))) %>%
+      # Counts by area and selected variables
+      group_by_all() %>% summarise(n = n()) %>% ungroup() %>%
+      # # Pivot so each column is a site
+      pivot_wider(names_from = area,
+                  values_from = n) %>%
+      # Add overall counts by variable combination
+      mutate(across(everything(), ~ifelse(is.na(.), 0, .))) %>%
+      mutate(Total = select(., all_of(site_counts$area)) %>% rowSums()) %>%
+      select(all_of(vars), all_of(site_counts$area), Total) %>%
+      arrange(across(vars)) %>%
+      # Add overall counts by site
+      rbind(totals)
+    
+  }else{
+    
+    table_data <- data %>%
+      select(area) %>%
+      # Counts by area
+      group_by_all() %>% summarise(n = n()) %>% ungroup() %>%
+      # Pivot so each column is a site
+      pivot_wider(names_from = area,
+                  values_from = n) %>%
+      # # Add overall counts by variable combination
+      mutate(Total = select(., site_counts$area) %>% rowSums()) %>%
+      select(all_of(site_counts$area), Total)
+    
+  }
+  return(table_data)
+}
 
+# vars = variables to stratify counts by area and overall
+# denom = dataset to add denominators under "data" counts in table
+kable_function <- function(data, vars = NULL, denom = NULL){
+  # Create table with denominators
+  if(!is.null(denom)){
+    numer <- table_function(data, vars) %>% 
+      pivot_longer(cols = -vars,
+                   values_to = "numer")
+    denom <- table_function(denom, vars) %>% 
+      pivot_longer(cols = -vars,
+                   values_to = "denom")
+    
+    new_table <- full_join(numer, denom, by = c(vars, "name")) %>%
+      mutate(numer = ifelse(is.na(numer), 0, numer),
+             frac = paste0(numer, "/", denom)) %>%
+      pivot_wider(id_cols = vars,
+                  names_from = name,
+                  values_from = frac) %>%
+      arrange(across(vars)) %>%
+      select(all_of(vars), "Atlanta", Baltimore, Miami, Tucson, Total) 
+    
+  }else{
+    new_table <- table_function(data, vars)
+  }
+  
+  # Create formatted table
+  if(!is.null(vars)){
+    kable_data <- new_table %>% 
+      rename_all(~str_to_title(str_replace(., "_", " "))) %>%
+      kable() %>%
+      kable_styling(full_width = F) %>%
+      collapse_rows(columns = 1:(length(vars)-1), valign = "top")
+  }else{
+    kable_data <- new_table %>%
+      kable() %>%
+      kable_styling(full_width = F)
+  }
+  return(kable_data)
+}
 
-```
+# time = time increments to group counts and plot along x-axis
+plot_function <- function(data, time){
+  plot <- data %>%
+    mutate(x_label = str_replace({{time}}, " ", "\n"),
+           x_label = fct_reorder(x_label, day_time)) %>%
+    group_by(x_label) %>% 
+    count() %>% ungroup() %>%
+    arrange(x_label) %>%
+    mutate(running_total = cumsum(n)) %>%
+    ggplot(aes(x = x_label, y = running_total, group = 1)) +
+    geom_line(linewidth = 1, color = "#224A7B") +
+    labs(x = "Time", y = "Cumulative Total") +
+    theme_bw() +
+    theme(panel.background = element_rect(fill='transparent'),
+          plot.background = element_rect(fill='transparent', color=NA))
+  
+  ggplotly(plot)
+}
 
-```{r number to select from each group, eval = FALSE}
-
-equal_proportions <- 45/9
-
-younger_hispanic <- equal_proportions
-younger_black <- equal_proportions
-younger_white <- equal_proportions
-
-older_hispanic <- equal_proportions
-older_black <- equal_proportions
-older_white <- equal_proportions
-
-oldest_hispanic <- equal_proportions
-oldest_black <- equal_proportions
-oldest_white <- equal_proportions
-
-```
-
-```{r randomly selected data and table, eval = FALSE}
-
-selected_list <- tibble(race_group = c("Hispanic/Latino", "Non-Hispanic Black", "Non-Hispanic White"),
-                           `50-59` = c(younger_hispanic, younger_black, younger_white),
-                           `60-69` = c(older_hispanic, older_black, older_white),
-                           `70-79` = c(oldest_hispanic, oldest_black, oldest_white)) %>%
-  pivot_longer(cols = -race_group, names_to = "age_group") %>%
-  transmute(group = paste0(race_group, " ", age_group), value)
-
-selected_data <- recruitment %>%
-  mutate(group = paste0(race_group, " ", age_group)) %>%
-  # https://stackoverflow.com/questions/66476142/sample-from-a-data-frame-using-group-specific-sample-sizes
-  left_join(selected_list, by = "group") %>%
-  group_by(area, group) %>%
-  mutate(samp = sample(n())) %>%
-  filter(samp <= ceiling(value)) %>%
-  ungroup() %>%
-  select(-c(value, samp))
-
-# Will need to split download by recruitment center:
-output$downloadData <- downloadHandler(
-    filename = function() {
-      paste0("selected_data_", format(Sys.Date(), "%y%d%m"), ".csv")
-    },
-    content = function(file) {
-      write.csv(selected_data, file)
-    }
-  )
-
-output$downloadDataAtl <- downloadHandler(
-    filename = function() {
-      paste0("selected_data_atlanta_", format(Sys.Date(), "%y%d%m"), ".csv")
-    },
-    content = function(file) {
-      write.csv(selected_data[selected_data$area == "Atlanta",], file)
-    }
-  )
-
-output$downloadDataBlt <- downloadHandler(
-    filename = function() {
-      paste0("selected_data_baltimore_", format(Sys.Date(), "%y%d%m"), ".csv")
-    },
-    content = function(file) {
-      write.csv(selected_data[selected_data$area == "Baltimore",], file)
-    }
-  )
-
-output$downloadDataMia <- downloadHandler(
-    filename = function() {
-      paste0("selected_data_miami_", format(Sys.Date(), "%y%d%m"), ".csv")
-    },
-    content = function(file) {
-      write.csv(selected_data[selected_data$area == "Miami",], file)
-    }
-  )
-
-output$downloadDataTuc <- downloadHandler(
-    filename = function() {
-      paste0("selected_data_tucson_", format(Sys.Date(), "%y%d%m"), ".csv")
-    },
-    content = function(file) {
-      write.csv(selected_data[selected_data$area == "Tucson",], file)
-    }
-  )
-
-selected_table <- selected_data %>%
-  group_by(area, race_group, age_group, group) %>%
-  summarise(n = n()) %>%
-  ungroup() %>%
-  complete(age_group, race_group, area, fill = list(n = 0)) %>%
-  pivot_wider(id_cols = c(race_group, age_group, group),
-              names_from = area,
-              values_from = n) %>%
-  select(Age = age_group, `Race/Ethnicity` = race_group,
-         Atlanta, Baltimore,  Miami, Tucson, group) %>%
-  arrange(Age, `Race/Ethnicity`) %>%
-  mutate(across(where(is.factor), as.character),
-         Total = Atlanta + Baltimore + Miami + Tucson) %>%
-  left_join(selected_list, by = "group") %>%
-  mutate(Total = paste0(Total, " /", value*4)) %>%
-  select(-c(group, value)) %>%
-  rbind(., c("Total", "", 
-             paste0(colSums(.[-c(1:2, ncol(.))]), " /", sum(selected_list$value, na.rm = T)), 
-             paste0(sum(.[-c(1:2, ncol(.))]), " /", sum(selected_list$value, na.rm = T) * 4)
-             )) %>%
-  kable() %>% 
-  kable_styling(full_width = F) %>%
-  collapse_rows(columns = 1:2, valign = "top") %>%
-  scroll_box(width = "100%", height = "500px")
 
 ```
 
 <!-- UI -->
 
-# Overall Recruitment
+Mindcrowd Population
+=====================================  
 
-<br>
+Inputs {.sidebar}
+-------------------------------------
 
-## Row
+#### Last MindCrowd test taken: `r format(max(all_mindcrowd_data$day_time), "%b-%d-%Y")`
 
-#### 
+```{r mindcrowd inputs}
+checkboxGroupInput("mindcrowd_vars", h4("Stratification Factors:"),
+                   c("Age Group" = "age_group", 
+                     "Sex" = "sex", 
+                     "Race Group" = "race_group", 
+                     "Paired Associates Test" = "paired_associates"),
+                   selected = c("age_group", "sex"))
+```
 
-```{r}
+Row
+-------------------------------------
 
-overall_table
+All MindCrowd paired associates test participants:
+
+<center>
+
+```{r mindcrowd graph}
+renderPlotly(plot_function(all_mindcrowd_data, year_time))
+```
+
+</center>
+---
+
+```{r mindcrowd table}
+output$mindcrowd_table <- renderText(kable_function(all_mindcrowd_data, input$mindcrowd_vars))
+htmlOutput("mindcrowd_table")
+```
+
+Mindcrowd Prescreen Eligible
+=====================================  
+
+Inputs {.sidebar}
+-------------------------------------
+
+#### Last MindCrowd test taken within MindCrowd prescreen eligible: `r format(max(prescreen_data$day_time), "%b-%d-%Y")`
+
+```{r prescreen inputs}
+checkboxGroupInput("prescreen_vars", h4("Stratification Factors:"),
+                   c("Age Group" = "age_group", 
+                     "Sex" = "sex", 
+                     "Race Group" = "race_group", 
+                     "Paired Associates Test" = "paired_associates"),
+                   selected = c("age_group", "sex"))
+```
+
+Row
+-------------------------------------
+
+Potential participants within 60 miles of a recruitment site and fit the study requirements:
+
+<center>
+
+```{r prescreen graph}
+renderPlotly(plot_function(prescreen_data, quarter_time))
+```
+
+</center>
+---
+
+```{r prescreen table}
+output$prescreen_table <- renderText(kable_function(prescreen_data, input$prescreen_vars))
+htmlOutput("prescreen_table")
+```
+
+HML Recruited
+=====================================  
+
+Inputs {.sidebar}
+-------------------------------------
+
+#### Data were last pulled from REDCap on: `r format(max(hml_data$update_date), "%b-%d-%Y")`
+
+```{r recruit inputs}
+
+checkboxGroupInput("recruit_vars", h4("Stratification Factors:"),
+                   c("Age Group" = "age_group", 
+                     "Sex" = "sex", 
+                     "Race Group" = "race_group", 
+                     "Paired Associates Test" = "paired_associates"),
+                   selected = c("age_group", "sex"))
+
+checkboxInput("compare_prescreen", h5("Table by Pre-Screen Population"), value = FALSE)
 
 ```
 
-# Counts by City {data-navmenu="Counts by"}
+Row
+-------------------------------------
 
-<br>
+Participants assigned an HML ID (and are in REDCap):
 
-## Row
+<center>
 
-#### 
+```{r recruit graph}
+renderPlotly(plot_function(hml_data, month_name_time))
+```
 
-```{r}
+</center>
 
-city_table
+---
+
+```{r recruit table}
+
+conditionalPanel(condition = "!input.compare_prescreen", htmlOutput("recruit_table"))
+conditionalPanel(condition = "input.compare_prescreen", 
+                 textOutput("compare_recruit_text"), 
+                 textOutput("compare_note_text"),
+                 htmlOutput("recruit_prescreen_table")
+                 )
+
+output$compare_recruit_text <- renderText(print("HML Recruited / Prescreen Eligible"))
+output$compare_note_text <- renderText(print("Note: NA in the denominator means the participants were recruited outside of the prescreen eligible list."))
+
+output$recruit_table <- renderText(kable_function(hml_data, input$recruit_vars))
+
+output$recruit_prescreen_table <- renderText(kable_function(hml_data, input$recruit_vars, 
+                                                            denom = prescreen_data))
 
 ```
 
-# Counts by Sex {data-navmenu="Counts by"}
+HML Consented
+=====================================  
 
-<br>
+Inputs {.sidebar}
+-------------------------------------
 
-## Row
+#### Data were last pulled from REDCap on: `r format(max(hml_data$update_date), "%b-%d-%Y")`
 
-#### 
+```{r consent inputs}
+checkboxGroupInput("consented_vars", h4("Stratification Factors:"),
+                   c("Age Group" = "age_group", 
+                     "Sex" = "sex", 
+                     "Race Group" = "race_group", 
+                     "Paired Associates Test" = "paired_associates"),
+                   selected = c("age_group", "sex"))
 
-```{r}
-gender_table
-```
-
-# Counts by Test Level {data-navmenu="Counts by"}
-
-<br>
-
-## Row
-
-#### 
-
-```{r}
-test_table
-```
-
-
-# Campaign Codes
-
-
-<br>
-
-## Row
-
-#### 
-
-```{r}
-
-campaign_table
+radioButtons("nonmissing", h5("Compare Counts"), 
+            choices = c("Only consented participants" = "consent",
+                        "Compare to consented to recruited participants" = "compare",
+                        "Compare to non-missing counts" = "missing"),
+            selected = "consent")
 
 ```
 
-<br>
+Row
+-------------------------------------
+
+Participants with a REDCap main_consent_date:
+
+<center>
+
+```{r consent graph}
+conditionalPanel(condition = "input.nonmissing == 'consent' | input.nonmissing == 'compare'", plotlyOutput("consented_plot"))
+conditionalPanel(condition = "input.nonmissing == 'missing'", plotlyOutput("nonmissing_plot"))
+
+output$consented_plot <- renderPlotly(plot_function(consented, quarter_time))
+output$nonmissing_plot <- renderPlotly(plot_function(consented %>%
+                                          filter(Overall == "Complete Neuropsych and Biometrics"), 
+                                        quarter_time))
+```
+
+</center>
+---
+
+```{r consent table}
+conditionalPanel(condition = "input.nonmissing == 'consent'", htmlOutput("consented_table"))
+conditionalPanel(condition = "input.nonmissing == 'missing'", textOutput("nonmissing_text"), 
+                 htmlOutput("nonmissing_table"))
+conditionalPanel(condition = "input.nonmissing == 'compare'", textOutput("compare_text"),
+                 htmlOutput("compare_table"))
+
+output$consented_table <- renderText(kable_function(consented, input$consented_vars))
+output$nonmissing_table <- renderText(kable_function(consented %>%
+                                                       filter(Overall == "Complete Neuropsych and Biometrics"), 
+                                                     input$consented_vars, 
+                                                     denom = consented))
+output$compare_table <- renderText(kable_function(consented, input$consented_vars, denom = hml_data))
+
+output$nonmissing_text <- renderText(print("HML Non-Missing Cognitive or Biometrics Data / HML Consented"))
+output$compare_text <- renderText(print("HML Consented / HML Recruited"))
+```
 
 
-Note: Haven't pulled recruitment data yet.
-
-# Help
-
-App information:
-
-This app currently displays screening data of participants in the PAN study. All tables display the same data.
-
-Data:
-
-Last updated: `r format(Sys.time(), "%b %d, %Y %H:%M")`
-
-<html>
-
-<p>
-
-Copyright ©: `r format(Sys.time(), "%Y")` StatLab, BIO5 ALL RIGHTS RESERVED
-
-</p>
-
-<p>
-
-Developer:
-
-</p>
-
-<p>
-
-Lisa White, Statistician <br/>
-
-</p>

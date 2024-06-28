@@ -36,7 +36,7 @@ library(kableExtra)
 # section to connect to Google Drive
 library(googledrive)
 # file with info for service account 
-googledrive::drive_auth(path = "pan-mindcrowd-uploads-ddf6b0dbe662.json")
+googledrive::drive_auth(path = "pan-mindcrowd-uploads-d9b7ecb93e53.json")
 
 # Option to silence the messages coming from the Google Drive library
 options(googledrive_quiet = TRUE)
@@ -48,11 +48,13 @@ theme_set(theme_bw())
 ```{r load data}
 
 with_drive_quiet(
-  drive_download(as_id("https://drive.google.com/file/d/1nWhqxGUEH6gHK27YT4Js4f-5rERkLqSa"), 
+  drive_download(as_id("https://drive.google.com/file/d/1pm5cuEKmJLragBApNVV1NobEw_WnPrnP"), 
                  overwrite = TRUE)
 )
 
 load(file = "pan_survey_files_list.Rdata")
+
+# 02-May-24: Google changed link to Drive from 1nWhqxGUEH6gHK27YT4Js4f-5rERkLqSa to 1pm5cuEKmJLragBApNVV1NobEw_WnPrnP
 
 ```
 
@@ -111,6 +113,11 @@ for(i in 2:length(files_list)){
                              by = c("study_id", "area"))%>%
     filter(!is.na(area) & area != "")
 }
+
+overall_time <- overall_attempted_time %>%
+  mutate(across(-c(study_id, area), as.Date)) %>%
+  pivot_longer(cols = -c(study_id, area)) %>%
+  arrange(desc(value))
 
 ```
 
@@ -407,7 +414,7 @@ output$downloadDataMiami <- downloadHandler(
 {.sidebar}
 ===================
 
-<br>
+#### Data updated: `r survey_update_date`.
 
 ```{r select survey input}
 
@@ -647,35 +654,3 @@ shiny::renderUI(
 
 ```
 
-
-# Help
-
-App information:
-
-This app displays summaries of survey completion.
-
-Data:
-
-Currently the app uses local version of data.
-
-Last updated: `r format(Sys.time(), "%b %d, %Y %H:%M")`
-
-<html>
-
-<p>
-
-Copyright ©: 2023 StatLab, BIO5 ALL RIGHTS RESERVED
-
-</p>
-
-<p>
-
-Developer:
-
-</p>
-
-<p>
-
-Lisa White, Statistician <br/>
-
-</p>
