@@ -1,11 +1,24 @@
 
+print("######################################")
+print("Generating HML IDs")
+print("######################################")
+
 rm(list = ls())
+
+library(DBI) # Connecting to database
 
 # Set file locations ----------
 
-setwd("C:/Users/Lisa/Box/pan_dashboard_data/generate_hml_id/")
+setwd("C:/Users/Lisa/Box/pan_dashboard_data/db_generate_app_data/")
 
-mindcrowd_folder <- "C:/Users/Lisa/Box/[UA BOX Health] MindCrowd Inbound/"
+con <- dbConnect(RPostgres::Postgres(),
+                 user = 'pan_user',
+                 password = 'PANdataBase!',
+                 dbname = 'pan_data',
+                 host = 'bio5-pan-prod.cluster-c0xzlo6s7duc.us-west-2.rds.amazonaws.com',
+                 port = '5432',
+                 sslmode = 'verify-full',
+                 sslrootcert = 'rds-ca-2019-root.pem')
 
 # Load Libraries -------------
 
@@ -14,29 +27,23 @@ library(tidyverse, quietly = T)
 # section to connect to Google Drive
 library(googledrive)
 # file with info for service account 
-googledrive::drive_auth(path = "pan-mindcrowd-uploads-ddf6b0dbe662.json")
+googledrive::drive_auth(path = "pan-mindcrowd-uploads-d9b7ecb93e53.json")
 
 # Option to silence the messages coming from the Google Drive library
 options(googledrive_quiet = TRUE)
 
 # Load recruitment lists ---------
 
-files_dates <- list.files(mindcrowd_folder)
-files_dates <- files_dates[str_detect(files_dates, "recruitment_list")]
-files_dates <- unique(str_sub(files_dates[grep(".csv", files_dates)], end = 10))
-files_dates <- files_dates[grep("20", files_dates)]
+atl_dat <- dbReadTable(con, "recruitment_list_atlanta")
 
-most_recent_update <- files_dates[order(files_dates, decreasing = T)][1]
+bal_dat <- dbReadTable(con, "recruitment_list_baltimore")
 
-print(paste0("Loading data from most recent update: ", most_recent_update, "."))
+mia_dat <- dbReadTable(con, "recruitment_list_miami")
 
-atl_dat <- read.csv(paste0(mindcrowd_folder, most_recent_update, "recruitment_list_atlanta.csv.gz"))
+tuc_dat <- dbReadTable(con, "recruitment_list_tucson")
 
-bal_dat <- read.csv(paste0(mindcrowd_folder, most_recent_update, "recruitment_list_baltimore.csv.gz"))
-
-mia_dat <- read.csv(paste0(mindcrowd_folder, most_recent_update, "recruitment_list_miami.csv.gz"))
-
-tuc_dat <- read.csv(paste0(mindcrowd_folder, most_recent_update, "recruitment_list_tucson.csv.gz"))
+print(paste0("Last participant created: ", 
+             format(as.Date(max(tuc_dat$created_date_participant, na.rm = T)), "%d-%b-%Y")))
 
 # Load current list of participants and all_screening_data
 
@@ -71,14 +78,6 @@ new_dat <- rbind(atl_dat %>% mutate(area = "Atlanta"),
 
 # Remove participants who already have HML IDs ------
 
-## Updating data to contain more demographics:
-## Only need to run once, keeping code for future reference:
-# 
-# dat <- dat %>%
-#   left_join(new_dat %>% select(participant_id, area, sex, age_group,
-#                                race, hispanic_latino, memory_rank),
-#             by = join_by(participant_id, area, age_group, sex, race, hispanic_latino, memory_rank)) 
-
 # Filters out already existing participant ids and adds new IDs
 updated_dat <- new_dat %>%
   filter(!participant_id %in% dat$participant_id) %>%
@@ -90,6 +89,8 @@ print(paste0("Loaded ", nrow(updated_dat), " rows of data from app folder with "
 
 # Create data for manual ID update ---------------
 
+print("Loading screening data.")
+
 # Get all of the screening data from the recruitment dashboard data script
 with_drive_quiet(
   drive_download(as_id("https://drive.google.com/file/d/1eTpEi3O7JFVuG4GkawK0C_DDOs93qVKW"),
@@ -99,7 +100,7 @@ with_drive_quiet(
 load("all_screening_data.Rdata")
 
 all_dat <- all_screening_data %>%
-  left_join(dat %>% select(participant_id_parent = participant_id, hml_id, hml_id_created_date),
+  left_join(dat %>% select(participant_id_parent = participant_id, hml_id, hml_id_created_date) %>% distinct(),
             by = "participant_id_parent") %>%
   distinct(participant_id, .keep_all = TRUE) %>%
   mutate(participant_id_parent2 = ifelse(participant_id_parent == participant_id,
@@ -119,31 +120,24 @@ all_dat <- all_screening_data %>%
   select(-c(participant_id, id_source))
 
 # Save deidentified id data and all screening data
+print("Saving HML ID data.")
 saveRDS(list(dat = updated_dat, 
              all_dat = all_dat), file = "generate_hml_id_dat.Rds")
 drive_put("generate_hml_id_dat.Rds", path=drive_find(pattern="HML Data", corpus="allDrives"))
 
 # Move the new participant_id_parent and hml_ids to the REDCap ID upload folder -------
 
-hml_id_files <- list.files(paste0(mindcrowd_folder, "/REDCap_ID_Assignment"))
-
-processed_ids <- do.call(rbind,
-                         lapply(paste0(mindcrowd_folder, "/REDCap_ID_Assignment/", hml_id_files),
-                                read.csv, header = T)
-                         )
+hml_id_files <- dbReadTable(con, "redcap_id_assignment")
 
 updated_ids <- updated_dat %>%
   filter(!is.na(hml_id),
-         !hml_id %in% processed_ids$hml_id)
+         !hml_id %in% hml_id_files$hml_id)
 
 if(nrow(updated_ids) > 0){
-  write.csv(updated_ids, file = paste0(mindcrowd_folder, "/HML_ID_Assignment/hml_id_data.csv"),
+  write.csv(updated_ids, file = "C:/Users/Lisa/Box/[UA BOX Health] MindCrowd Inbound/HML_ID_Assignment/hml_id_data.csv",
             row.names = F)
   
   print("Saved updated data to REDCap ID creation folder.")
 }else{
   print("No updated data to save to REDCap ID creation folder.")
 }
-
-
-

@@ -479,7 +479,7 @@ redcap_formatting <- function(redcap_files_list){
            across(contains("_timestamp"), ~format(as.Date(.), "%m/%d/%Y")),
            across(contains("_timestamp"), as.character),
            across(everything(), ~ifelse(is.na(.), "", .))) %>%
-    mutate(redcap_event_name = "baseline_assessmen_arm_1", .after = record_id)
+    mutate(redcap_event_name = "hml_survey_tracker_arm_1", .after = record_id)
   
   return(redcap_data)
 }

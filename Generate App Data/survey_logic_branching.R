@@ -302,6 +302,9 @@ survey_logic_branching <- function(files_list){
                                              files_list[["ses"]]$SES_v1.0.8 == "No",
                                            "Not missing",
                                            files_list[["ses"]]$SES_v1.0.9) 
+  files_list[["ses"]]$SES_v1.0.12 <- ifelse(files_list[["ses"]]$SES_v1.0.11 == "No",
+                                           "Not missing",
+                                           files_list[["ses"]]$SES_v1.0.12) 
   
   # Sleep ----------
   
