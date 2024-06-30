@@ -63,33 +63,29 @@ with_drive_quiet(
 )
 load(file = "pan_games_files_list.Rdata")
 
-# 02-May-24: Google drive changed link to data from 1qa2MeTjZMNQQep4EIPOh0MMKCY2-M8Jc to 1n4LtM6Z3YzmP40K5Vpm4asdCaRcbjcdY
-
-# dat <- read.csv(textConnection(getURL(hmlfile, userpwd=logininfo, ftp.ssl=TRUE)), header = T)
-
 ```
 
 ```{r overall game calculations}
 
-overall_attempted <- files_list[[1]] %>%
-  select(study_id, area, contains("game_status"), contains("timestamp")) %>%
-  group_by(study_id) %>% arrange(.[3]) %>% slice(1) %>% ungroup()
+overall_attempted <- files_list %>%
+  reduce(full_join, by = c("hml_id", "record_id", "area")) %>%
+  select(hml_id, area)
 
-for(i in 2:length(files_list)){
+for(i in 1:length(files_list)){
   
   game_data <- files_list[[i]] %>% 
-    select(study_id, contains("game_status"), contains("timestamp")) %>%
-    group_by(study_id) %>% arrange(.[3]) %>% slice(1) %>% ungroup()
+    select(hml_id, contains("game_status"), contains("timestamp")) %>%
+    group_by(hml_id) %>% arrange(.[3]) %>% slice(1) %>% ungroup()
   
   overall_attempted <- merge(overall_attempted,
                              game_data,
                              all = T,
-                             by = c("study_id"))
+                             by = c("hml_id"))
 }
 
 overall_attempted_table <- overall_attempted %>%
   rbind(overall_attempted %>% mutate(area = "All")) %>%
-  select(-study_id) %>%
+  select(-hml_id) %>%
   select(-contains("timestamp")) %>%
   mutate(area = str_to_title(area)) %>%
   mutate(across(-area, ~ifelse(is.na(.) | . == "Not-Compeleted", 1, 0))) %>%
@@ -225,8 +221,8 @@ table_function <- function(picked_area = "All", game = "All", picked_id = "All")
           kable_styling(full_width = F)
       }else{ # Look at list of completed games for a participant
         overall_attempted %>%
-          filter(study_id == picked_id) %>%
-          select(-c(study_id, area)) %>%
+          filter(hml_id == picked_id) %>%
+          select(-c(hml_id, area)) %>%
           rename_all(~str_remove(., "_game")) %>%
           pivot_longer(cols =  everything(),
                        names_to = c("game", ".value"),
@@ -245,8 +241,8 @@ table_function <- function(picked_area = "All", game = "All", picked_id = "All")
     }else{
       # Look at specific answers for a participant
       files_list[[game]] %>%
-        filter(study_id == picked_id) %>%
-        select(-c(study_id, area, game_result, game_name, browser_useragent,
+        filter(hml_id == picked_id) %>%
+        select(-c(hml_id, area, game_result, game_name, browser_useragent,
                   user_agent, latitude, longitude, ip_address, language, tz_offset,
                   zip_code, user_device)) %>%
         mutate_all(as.character) %>%
@@ -267,7 +263,7 @@ table_function <- function(picked_area = "All", game = "All", picked_id = "All")
 download_data_function <- function(picked_id){
   
   redcap_data_participant <- lapply(redcap_data, function(x){
-    new_x <- filter(x, study_id == picked_id)
+    new_x <- filter(x, hml_id == picked_id)
     new_x
   })
   
@@ -275,7 +271,7 @@ download_data_function <- function(picked_id){
 
 
 redcap_data_participant <- lapply(redcap_data, function(x){
-    new_x <- filter(x, study_id == "HML0104")})
+    new_x <- filter(x, hml_id == "HML0104")})
 
 output$downloadDataTucson <- downloadHandler(
   filename = function(){
@@ -397,7 +393,7 @@ Row
 ```{r select id for tucson}
 
 selectInput("idPick_tucson", label = "Select a participant ID to view game information.",
-            choices = c(files_list[[1]]$study_id[files_list[[1]]$area == "tucson"]))
+            choices = c(overall_attempted$hml_id[overall_attempted$area == "tucson"]))
 
 renderUI({downloadButton("downloadDataTucson", "Download Participant Data")})
 
@@ -441,7 +437,7 @@ Row
 ```{r select id for atlanta}
 
 selectInput("idPick", label = "Select a participant ID to view game information.",
-            choices = c(files_list[[1]]$study_id[files_list[[1]]$area == "atlanta"]))
+            choices = c(overall_attempted$hml_id[overall_attempted$area == "atlanta"]))
 
 renderUI({downloadButton("downloadDataAtlanta", "Download Participant Data")})
 
@@ -485,7 +481,7 @@ Row
 ```{r select id for baltimore}
 
 selectInput("idPick_baltimore", label = "Select a participant ID to view game information.",
-            choices = c(files_list[[1]]$study_id[files_list[[1]]$area == "baltimore"]))
+            choices = c(overall_attempted$hml_id[overall_attempted$area == "baltimore"]))
 
 renderUI({downloadButton("downloadDataBaltimore", "Download Participant Data")})
 
@@ -529,7 +525,7 @@ Row
 ```{r select id for miami}
 
 selectInput("idPick_miami", label = "Select a participant ID to view game information.",
-            choices = c(files_list[[1]]$study_id[files_list[[1]]$area == "miami"]))
+            choices = c(overall_attempted$hml_id[overall_attempted$area == "miami"]))
 
 renderUI({downloadButton("downloadDataMiami", "Download Participant Data")})
 
