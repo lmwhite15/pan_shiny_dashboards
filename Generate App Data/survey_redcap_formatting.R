@@ -56,7 +56,7 @@ redcap_formatting <- function(redcap_files_list){
   }
   
   redcap_files_list[["brain_disease"]] <- redcap_files_list[["brain_disease"]] %>%
-    select(record_id, study_id, bd_timestamp, 
+    select(record_id, hml_id, bd_timestamp, 
            paste0(rep(paste0("bd_v10", 1:73), each = 6), "___", c(1,2,3,4,0,5)),
            brain_disease_complete = bd_complete)
   
@@ -442,7 +442,7 @@ redcap_formatting <- function(redcap_files_list){
                              . == "Mildly Stressful" ~ 1,
                              . == "Stressful" ~ 2,
                              . == "Very Stressful" ~ 3))) %>%
-    select(record_id, study_id, socstress_timestamp, 
+    select(record_id, hml_id, socstress_timestamp, 
            paste0("socstress_v10", rep(1:12, each = 2), c("", "_yes")),
            socstress_complete)
   
@@ -473,7 +473,7 @@ redcap_formatting <- function(redcap_files_list){
   # Combine surveys -------
   
   redcap_data <- redcap_files_list %>% 
-    reduce(full_join, by = c("record_id", "study_id")) %>%
+    reduce(full_join, by = c("record_id", "hml_id")) %>%
     rename(c19_v1036_oth = c19_v1035_oth) %>%
     mutate(across(where(is.character), ~ifelse(. %in% c("Not missing", NA), "", .)),
            across(contains("_timestamp"), ~format(as.Date(.), "%m/%d/%Y")),

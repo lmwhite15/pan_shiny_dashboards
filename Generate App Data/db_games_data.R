@@ -36,34 +36,47 @@ con <- dbConnect(RPostgres::Postgres(),
                  sslmode = 'verify-full',
                  sslrootcert = 'rds-ca-2019-root.pem')
 
-
 # Load data --------------------
 
 print("Loading current participants data.")
 
-recruitment_zip_codes <- read.csv("recruitment_zip_codes.csv")
+redcap_participant_data <- dbReadTable(con, "p2_redcap_demographics") %>%
+  mutate(area = case_when(group_id_number == 4669 ~ "atlanta",
+                          group_id_number == 4668 ~ "baltimore",
+                          group_id_number == 4667 ~ "miami",
+                          group_id_number == 4670 ~ "tucson")) %>%
+  select(hml_id, record_id, participant_id_parent, area, api_import_date)
 
-participant_data <- dbReadTable(con, "participants") %>%
-  mutate(area = case_when(mailing_postalcode %in% recruitment_zip_codes$zip_code[which(recruitment_zip_codes$recruit_location == "tucson")] ~ "tucson",
-                          mailing_postalcode %in% recruitment_zip_codes$zip_code[which(recruitment_zip_codes$recruit_location == "miami")] ~ "miami",
-                          mailing_postalcode %in% recruitment_zip_codes$zip_code[which(recruitment_zip_codes$recruit_location == "baltimore")] ~ "baltimore",
-                          mailing_postalcode %in% recruitment_zip_codes$zip_code[which(recruitment_zip_codes$recruit_location == "atlanta")] ~ "atlanta")) %>%
-  select(participant_id, participant_id_parent, area, created_date_participant, email)
-## Load results data
+## Get participant_ids
+participant_id_dat <- dbReadTable(con, "views_all_ids") %>%
+  select(hml_id, participant_id = participant_ids) %>%
+  separate_rows(participant_id)
 
-# 08-Feb-24: Most recent files no longer contain update date
-# names <- list.files(mindcrowd_folder)
-# 
-# files_dates <- unique(str_sub(names[grep(".csv", names)], end = 10))
-# files_dates <- files_dates[grep("20", files_dates)]
-#
-# most_recent_update <- files_dates[order(files_dates, decreasing = T)][1]
-# 
-# names <- str_replace(names[which(str_detect(names, "responses") & str_detect(names, most_recent_update))], "_responses", "")
-# names <- str_sub(names, start = 11, end = -8)
-# names <- names[-which(names == "memory")]
-# 
-# files <- paste0(mindcrowd_folder, "/", most_recent_update, names, ".csv.gz")
+# # Get biometrics completed date (to represent baseline_assessment completion)
+# participant_bio_dat <- dbReadTable(con, "p2_redcap_biometrics") %>%
+#   select(hml_id, bio_completed_by_date)
+
+# Get eligibility date
+participant_elig_dat <- dbReadTable(con, "p2_redcap_mri_screening") %>%
+  select(hml_id, mri_screen_date)
+
+# Attach participant ids and assign date participant started study
+
+## Date to start relying on hml_id_created_date for study start:
+hml_start_date <- as.Date("2023-10-01")
+
+participant_data <- redcap_participant_data %>%
+  left_join(participant_id_dat, by = "hml_id") %>%
+  left_join(participant_elig_dat, by = "hml_id") %>%
+  # mutate(study_start_date = case_when(api_import_date < hml_start_date & api_import_date < bio_completed_by_date ~ api_import_date,
+  #                                    api_import_date < hml_start_date & api_import_date >= bio_completed_by_date ~ bio_completed_by_date,
+  #                                    TRUE ~ api_import_date)) %>%
+  mutate(study_start_date = case_when(api_import_date < hml_start_date & api_import_date < mri_screen_date ~ api_import_date,
+                                      api_import_date < hml_start_date & api_import_date >= mri_screen_date ~ mri_screen_date,
+                                      TRUE ~ api_import_date)) %>%
+  select(-c(api_import_date, mri_screen_date))
+
+## Load responses data
 
 names <- c("attention", "faces_names", "focus", "keep_track", "objects", "objects_spatial", 
            "objects_temporal", "react", "shapes", "switching", "word_pairs")
@@ -71,65 +84,16 @@ names <- c("attention", "faces_names", "focus", "keep_track", "objects", "object
 raw_files_list <- lapply(names, 
                          function(x){dbReadTable(con, x)})
 
-## Load responses data
+names(raw_files_list) <- names
 
-response_raw_files_list <- lapply(names, 
+response_files_list <- lapply(c("word_pairs", "keep_track", "shapes", "faces_names", "focus", "switching", "react"), 
                                   function(x){dbReadTable(con, paste0(x, "_responses"))})
-
-## HML Recruited Participant IDs -------------
-## Using csv from REDCap ID Assignment folder in Box
-hml_id_files <- list.files(paste0(mindcrowd_folder, "/REDCap_ID_Assignment"))
-
-hml_ids <- do.call(rbind, 
-                   lapply(paste0(mindcrowd_folder, "/REDCap_ID_Assignment/", hml_id_files), 
-                          read.csv)) %>%
-  rename(record_id = redcap_record_id, 
-         study_id = hml_id) %>%
-  mutate(record_id = as.character(record_id))
-
-## Match participant data to hml_ids
-hml_participant_data <- hml_ids %>%
-  left_join(participant_data, by = "participant_id_parent",
-            relationship = "many-to-many") %>%
-  # Replace any times with missing area observations with another time area
-  group_by(participant_id_parent) %>% fill(area, .direction = "downup") %>% ungroup() %>%
-  # # Select most recent survey for each participant
-  # group_by(participant_id_parent) %>%
-  # arrange(desc(created_date_participant)) %>% slice(1) %>% ungroup() %>% 
-  select(-created_date_participant) %>%
-  mutate(participant_id = ifelse(is.na(participant_id), participant_id_parent, participant_id))
-
-# Attach missing areas/emails to participants outside of recruitment zone ---------
-
-hml_id_area_files <- list.files(paste0(mindcrowd_folder, "/HML_ID_Assignment/Archived_Files"))
-
-hml_id_areas <- do.call(rbind, 
-                        lapply(paste0(mindcrowd_folder, "/HML_ID_Assignment/Archived_Files/", hml_id_area_files), 
-                               function(x){read.csv(x) %>% select(hml_id, area)})) %>%
-  rename(study_id = hml_id) %>% distinct() %>% mutate(area = tolower(area))
-
-# Add missing areas
-
-missing_area_ids <- filter(hml_participant_data, is.na(area)) %>%
-  select(-area) %>% left_join(hml_id_areas, by = "study_id")
-
-hml_participant_data <- hml_participant_data %>%
-  filter(!is.na(area)) %>% rbind(missing_area_ids)
-
-# Add missing emails
-
-missing_emails <- filter(hml_participant_data, is.na(email)) %>%
-  select(-email) %>% left_join(select(participant_data, participant_id, email), by = "participant_id")
-
-hml_participant_data <- hml_participant_data %>%
-  filter(!is.na(email)) %>% rbind(missing_emails)
+names(response_files_list) <- c("word_pairs", "keep_track", "shapes", "faces_names", "focus", "switching", "react")
 
 # Format games data ----------------------
 
 # Capitalize all email addresses to make matching easier and select most recent game
 # Match games to participant data within recruitment areas
-
-names(raw_files_list) <- names
 
 files_list <- lapply(raw_files_list, function(x){
   if(sum(str_detect(names(x), "created_date_game_session") > 0)){
@@ -141,10 +105,12 @@ files_list <- lapply(raw_files_list, function(x){
     group_by(participant_id) %>% arrange(desc(created_date_game_result)) %>% 
     slice(1) %>% ungroup()
   
-  new_x <- hml_participant_data %>%
+  new_x <- participant_data %>%
     left_join(recent_x, by = "participant_id") %>%
-    select(study_id, area, everything(), -email) %>%
-    mutate(across(-created_date_game_result, ~ifelse(!is.na(created_date_game_result) & is.na(.), "", .))) %>%
+    select(hml_id, area, everything()) %>%
+    filter(!is.na(created_date_game_result)) %>%
+    filter(created_date_game_result >= study_start_date) %>%
+    mutate(across(-c(created_date_game_result, record_id), ~ifelse(is.na(.), "", .))) %>%
     mutate(created_date_game_result = as.Date(created_date_game_result))
   
   game_name <- new_x$game_name[which(!is.na(new_x$game_name))][1] %>% 
@@ -162,20 +128,14 @@ files_list <- lapply(raw_files_list, function(x){
 
 # Format responses data for REDCap import ------------
 
-# print("Formatting games data for REDcap.")
-
-names(response_raw_files_list) <- names
-
-response_files_list <- response_raw_files_list[c("word_pairs", "keep_track", "shapes", "faces_names", "focus", "switching", "react")]
-
 ## Word Pairs
 
 response_files_list[["word_pairs"]] <- files_list[["word_pairs"]] %>%
-  select(study_id, participant_id, game_result) %>%
+  select(hml_id, participant_id, game_result) %>%
   left_join(response_files_list[["word_pairs"]] %>% filter(!is.na(game_result)), by = "game_result",
             relationship = "many-to-many") %>%
   mutate(question_number = NA) %>% # because "question_number" not found in word pairs data
-  select(study_id, participant_id, game_result, created_date_game_response = created_date_game_result,
+  select(hml_id, participant_id, game_result, created_date_game_response = created_date_game_result,
          WP_round = round,
          WP_trial_type = difficulty,
          WP_trial = question_number, 
@@ -193,10 +153,10 @@ response_files_list[["word_pairs"]] <- files_list[["word_pairs"]] %>%
 ## Keep Track
 
 response_files_list[["keep_track"]] <- files_list[["keep_track"]] %>%
-  select(study_id, participant_id, game_result) %>%
+  select(hml_id, participant_id, game_result) %>%
   left_join(response_files_list[["keep_track"]], by = "game_result",
             relationship = "many-to-many") %>%
-  select(study_id, participant_id, game_result, created_date_game_response,
+  select(hml_id, participant_id, game_result, created_date_game_response,
          KT_round = round,
          KT_trial = question_number,
          KT_correct_resp = right_answer,
@@ -207,10 +167,10 @@ response_files_list[["keep_track"]] <- files_list[["keep_track"]] %>%
 ## Shapes
 
 response_files_list[["shapes"]] <- files_list[["shapes"]] %>%
-  select(study_id, participant_id, game_result) %>%
+  select(hml_id, participant_id, game_result) %>%
   left_join(response_files_list[["shapes"]], by = "game_result",
             relationship = "many-to-many") %>%
-  select(study_id, participant_id, game_result, created_date_game_response,
+  select(hml_id, participant_id, game_result, created_date_game_response,
          S_round = round,
          S_trial = question_number,
          S_condition = difficulty,
@@ -232,10 +192,10 @@ response_files_list[["shapes"]] <- files_list[["shapes"]] %>%
 ## Face Names
 
 response_files_list[["faces_names"]] <- files_list[["faces_names"]] %>%
-  select(study_id, participant_id, game_result) %>%
+  select(hml_id, participant_id, game_result) %>%
   left_join(response_files_list[["faces_names"]], by = "game_result",
             relationship = "many-to-many") %>%
-  select(study_id, participant_id, game_result, created_date_game_response,
+  select(hml_id, participant_id, game_result, created_date_game_response,
          FN_round = round,
          FN_trial = question_number,
          FN_trial_type = question_type,
@@ -253,10 +213,10 @@ response_files_list[["faces_names"]] <- files_list[["faces_names"]] %>%
 ## Focus
 
 response_files_list[["focus"]] <- files_list[["focus"]] %>%
-  select(study_id, participant_id, game_result) %>%
+  select(hml_id, participant_id, game_result) %>%
   left_join(response_files_list[["focus"]], by = "game_result",
             relationship = "many-to-many") %>%
-  select(study_id, participant_id, game_result, created_date_game_response,
+  select(hml_id, participant_id, game_result, created_date_game_response,
          F_round = round,
          F_trial_type = congruent,
          F_trial = question_number,
@@ -272,10 +232,10 @@ response_files_list[["focus"]] <- files_list[["focus"]] %>%
 ## Switching
 
 response_files_list[["switching"]] <- files_list[["switching"]] %>%
-  select(study_id, participant_id, game_result) %>%
+  select(hml_id, participant_id, game_result) %>%
   left_join(response_files_list[["switching"]], by = "game_result",
             relationship = "many-to-many") %>%
-  select(study_id, participant_id, game_result, created_date_game_response,
+  select(hml_id, participant_id, game_result, created_date_game_response,
          SW_round = round,
          SW_trial_type = round_descriptive,
          SW_trial = question_number,
@@ -289,10 +249,10 @@ response_files_list[["switching"]] <- files_list[["switching"]] %>%
 ## React
 
 response_files_list[["react"]] <- files_list[["react"]] %>%
-  select(study_id, participant_id, game_result) %>%
+  select(hml_id, participant_id, game_result) %>%
   left_join(response_files_list[["react"]], by = "game_result",
             relationship = "many-to-many") %>%
-  select(study_id, participant_id, game_result, created_date_game_response,
+  select(hml_id, participant_id, game_result, created_date_game_response,
          R_round = round,
          R_trial_type = trial_type,
          R_trial = question_number,
@@ -310,7 +270,6 @@ response_files_list[["react"]] <- files_list[["react"]] %>%
 redcap_data <- response_files_list
 
 games_update_date <- format(Sys.Date(), "%b %d, %Y")
-games_update_date <- "Jun 28, 2024"
 
 save(games_update_date, names, files_list, redcap_data, file = paste0("pan_games_files_list.Rdata"))
 
