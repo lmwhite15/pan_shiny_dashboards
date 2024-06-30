@@ -62,12 +62,12 @@ load(file = "pan_survey_files_list.Rdata")
 
 complete_files_list <- lapply(files_list, function(x){
   new_x <- x %>%
-    mutate(across(-c(study_id, area, ends_with("_timestamp")), 
+    mutate(across(-c(hml_id, area, ends_with("_timestamp")), 
                   ~ifelse(is.na(.) | . == "", 1, 0))) %>%
-    mutate(missing = select(., -c(study_id, area, ends_with("_timestamp"))) %>%
+    mutate(missing = select(., -c(hml_id, area, ends_with("_timestamp"))) %>%
              rowSums(na.rm = T),
            completed = ifelse(!is.na(select(., ends_with("_timestamp"))) & missing == 0, "Completed", "Not Completed")) %>%
-    select(study_id, area, completed, everything(), -missing) %>%
+    select(hml_id, area, completed, everything(), -missing) %>%
     rename(!!paste0(str_extract(names(.)[ncol(.)], ".*(?=_)"), "_completed") := completed) %>%
     filter(!is.na(area) & area != "")
   
@@ -84,12 +84,12 @@ for(i in 2:length(complete_files_list)){
   overall_attempted <- merge(overall_attempted,
                              complete_files_list[[i]][1:3],
                              all = T,
-                             by = c("study_id", "area"))
+                             by = c("hml_id", "area"))
 }
 
 overall_attempted_table <- overall_attempted %>%
   rbind(overall_attempted %>% mutate(area = "All")) %>%
-  select(-study_id) %>%
+  select(-hml_id) %>%
   mutate(across(everything(), as.character),
          across(-area, ~ifelse(. == "Not Completed", 1, 0))) %>%
   group_by(area) %>% mutate(nrow = n()) %>%
@@ -110,13 +110,13 @@ for(i in 2:length(files_list)){
   overall_attempted_time <- merge(overall_attempted_time,
                              files_list[[i]][1:3],
                              all = T,
-                             by = c("study_id", "area"))%>%
+                             by = c("hml_id", "area"))%>%
     filter(!is.na(area) & area != "")
 }
 
 overall_time <- overall_attempted_time %>%
-  mutate(across(-c(study_id, area), as.Date)) %>%
-  pivot_longer(cols = -c(study_id, area)) %>%
+  mutate(across(-c(hml_id, area), as.Date)) %>%
+  pivot_longer(cols = -c(hml_id, area)) %>%
   arrange(desc(value))
 
 ```
@@ -139,9 +139,9 @@ plot_function <- function(picked_area = "All", survey = "All"){
                                          vjust = 0.1))
     }else{ # Look at a specific survey for all areas
       files_list[[survey]] %>%
-        select(-c(study_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
+        select(-c(hml_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
         rbind(files_list[[survey]] %>%
-                select(-c(study_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
+                select(-c(hml_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
                 mutate(area = "All")) %>%
         group_by(area) %>%
         mutate(across(everything(), ~ifelse(is.na(.) | . == "", 1, 0)),
@@ -179,9 +179,9 @@ plot_function <- function(picked_area = "All", survey = "All"){
                                          vjust = 0.1))
     }else{ # Look at specific survey for a specific area
       files_list[[survey]] %>%
-        select(-c(study_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
+        select(-c(hml_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
         rbind(files_list[[survey]] %>%
-                select(-c(study_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
+                select(-c(hml_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
                 mutate(area = "All")) %>%
         group_by(area) %>%
         mutate(across(everything(), ~ifelse(is.na(.) | . == "", 1, 0)),
@@ -231,9 +231,9 @@ table_function <- function(picked_area = "All", survey = "All", picked_id = "All
         kable_styling(full_width = F)
     }else{ # Look at a specific survey for all areas
       files_list[[survey]] %>%
-        select(-c(study_id, ends_with("_timestamp"))) %>%
+        select(-c(hml_id, ends_with("_timestamp"))) %>%
         rbind(files_list[[survey]] %>%
-                select(-c(study_id, ends_with("_timestamp"))) %>%
+                select(-c(hml_id, ends_with("_timestamp"))) %>%
                 mutate(area = "All")) %>%
         group_by(area) %>%
         mutate(across(everything(), ~ifelse(is.na(.) | . == "", 1, 0)),
@@ -280,8 +280,8 @@ table_function <- function(picked_area = "All", survey = "All", picked_id = "All
           kable_styling(full_width = F)
       }else{ # Look at list of completed surveys for a participant
         overall_attempted_time %>%
-          filter(study_id == picked_id) %>%
-          select(-c(study_id, area)) %>%
+          filter(hml_id == picked_id) %>%
+          select(-c(hml_id, area)) %>%
           mutate_all(~format(as.Date(.), "%b %d, %Y")) %>%
           mutate_all(~ifelse(is.na(.), "Not Attempted", .)) %>%
           rename_all(~str_to_title(str_replace(names, "_", " "))) %>%
@@ -291,8 +291,8 @@ table_function <- function(picked_area = "All", survey = "All", picked_id = "All
                        names_to = "Survey",
                        values_to = "Date Attempted") %>%
           left_join(overall_attempted %>%
-                      filter(study_id == picked_id) %>%
-                      select(-c(study_id, area)) %>%
+                      filter(hml_id == picked_id) %>%
+                      select(-c(hml_id, area)) %>%
                       rename_all(~str_to_title(str_replace(names, "_", " "))) %>%
                       rename_all(~ifelse(. %in% c("Adl", "Fhad", "Qpar", "Ses", "Swls"),
                                          toupper(.), .)) %>%
@@ -308,7 +308,7 @@ table_function <- function(picked_area = "All", survey = "All", picked_id = "All
       if(picked_id == "All"){ # Look at completed items for specific survey
         files_list[[survey]] %>%
           filter(area == picked_area) %>%
-          select(-c(study_id, area, ends_with("_timestamp"))) %>%
+          select(-c(hml_id, area, ends_with("_timestamp"))) %>%
           mutate(across(everything(), ~ifelse(is.na(.) | . == "", 1, 0)),
                  nrow = n()) %>%
           pivot_longer(cols = -nrow) %>%
@@ -332,8 +332,8 @@ table_function <- function(picked_area = "All", survey = "All", picked_id = "All
           kable_styling(full_width = F)
       }else{ # Look at specific answers for a participant
         files_list[[survey]] %>%
-          filter(area == picked_area, study_id == picked_id) %>%
-          select(-c(study_id, area, ends_with("_timestamp"))) %>%
+          filter(area == picked_area, hml_id == picked_id) %>%
+          select(-c(hml_id, area, ends_with("_timestamp"))) %>%
           select(paste0(str_extract(names(.), ".*(?=_)"), "_v1.0.", 1:ncol(.))) %>%
           mutate_all(as.character) %>%
           pivot_longer(cols = everything(),
@@ -359,8 +359,8 @@ table_function <- function(picked_area = "All", survey = "All", picked_id = "All
 
 download_data_function <- function(picked_id){
   
-  redcap_data_participant <- filter(redcap_data, study_id == picked_id) %>%
-    select(-study_id)
+  redcap_data_participant <- filter(redcap_data, hml_id == picked_id) %>%
+    select(-hml_id)
   
 }
 
@@ -491,7 +491,7 @@ Row
 ```{r select id for tucson}
 
 selectInput("idPick_tucson", label = "Select a participant ID to view survey entres.",
-            choices = c(files_list[[1]]$study_id[files_list[[1]]$area == "tucson"]))
+            choices = c(files_list[[1]]$hml_id[files_list[[1]]$area == "tucson"]))
 
 renderUI({downloadButton("downloadDataTucson", "Download Participant Data")})
 
@@ -535,7 +535,7 @@ Row
 ```{r select id for atlanta}
 
 selectInput("idPick", label = "Select a participant ID to view survey entres.",
-            choices = c(files_list[[1]]$study_id[files_list[[1]]$area == "atlanta"]))
+            choices = c(files_list[[1]]$hml_id[files_list[[1]]$area == "atlanta"]))
 
 renderUI({downloadButton("downloadDataAtlanta", "Download Participant Data")})
 
@@ -579,7 +579,7 @@ Row
 ```{r select id for baltimore}
 
 selectInput("idPick_baltimore", label = "Select a participant ID to view survey entres.",
-            choices = c(files_list[[1]]$study_id[files_list[[1]]$area == "baltimore"]))
+            choices = c(files_list[[1]]$hml_id[files_list[[1]]$area == "baltimore"]))
 
 renderUI({downloadButton("downloadDataBaltimore", "Download Participant Data")})
 
@@ -623,7 +623,7 @@ Row
 ```{r select id for miami}
 
 selectInput("idPick_miami", label = "Select a participant ID to view survey entres.",
-            choices = c(files_list[[1]]$study_id[files_list[[1]]$area == "miami"]))
+            choices = c(files_list[[1]]$hml_id[files_list[[1]]$area == "miami"]))
 
 renderUI({downloadButton("downloadDataMiami", "Download Participant Data")})
 
