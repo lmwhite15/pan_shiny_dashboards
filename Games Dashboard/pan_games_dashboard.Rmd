@@ -67,8 +67,7 @@ load(file = "pan_games_files_list.Rdata")
 
 ```{r overall game calculations}
 
-overall_attempted <- files_list %>%
-  reduce(full_join, by = c("hml_id", "record_id", "area")) %>%
+overall_attempted <- participant_dates %>%
   select(hml_id, area)
 
 for(i in 1:length(files_list)){

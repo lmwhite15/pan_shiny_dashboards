@@ -11,8 +11,6 @@ rm(list = ls())
 
 setwd("C:/Users/Lisa/Box/pan_dashboard_data/generate_games_data/")
 
-mindcrowd_folder <- "C:/Users/Lisa/Box/[UA BOX Health] MindCrowd Inbound"
-
 # Load libraries --------------
 
 library(DBI) # Connecting to database
@@ -57,8 +55,8 @@ participant_id_dat <- dbReadTable(con, "views_all_ids") %>%
 #   select(hml_id, bio_completed_by_date)
 
 # Get eligibility date
-participant_elig_dat <- dbReadTable(con, "p2_redcap_mri_screening") %>%
-  select(hml_id, mri_screen_date)
+participant_elig_dat <- dbReadTable(con, "p2_redcap_consent_form") %>%
+  select(hml_id, main_consent_date)
 
 # Attach participant ids and assign date participant started study
 
@@ -71,10 +69,10 @@ participant_data <- redcap_participant_data %>%
   # mutate(study_start_date = case_when(api_import_date < hml_start_date & api_import_date < bio_completed_by_date ~ api_import_date,
   #                                    api_import_date < hml_start_date & api_import_date >= bio_completed_by_date ~ bio_completed_by_date,
   #                                    TRUE ~ api_import_date)) %>%
-  mutate(study_start_date = case_when(api_import_date < hml_start_date & api_import_date < mri_screen_date ~ api_import_date,
-                                      api_import_date < hml_start_date & api_import_date >= mri_screen_date ~ mri_screen_date,
+  mutate(study_start_date = case_when(api_import_date < hml_start_date & api_import_date < main_consent_date ~ api_import_date,
+                                      api_import_date < hml_start_date & api_import_date >= main_consent_date ~ main_consent_date,
                                       TRUE ~ api_import_date)) %>%
-  select(-c(api_import_date, mri_screen_date))
+  select(-c(api_import_date, main_consent_date))
 
 ## Load responses data
 
@@ -271,7 +269,9 @@ redcap_data <- response_files_list
 
 games_update_date <- format(Sys.Date(), "%b %d, %Y")
 
-save(games_update_date, names, files_list, redcap_data, file = paste0("pan_games_files_list.Rdata"))
+participant_dates <- participant_data %>% select(hml_id, record_id, area, study_start_date) %>% distinct()
+
+save(games_update_date, names, files_list, redcap_data, participant_dates, file = paste0("pan_games_files_list.Rdata"))
 
 drive_put("pan_games_files_list.Rdata", path=drive_find(pattern="HML Data", corpus="allDrives"))
 
