@@ -9,7 +9,7 @@ rm(list = ls())
 
 # Set file locations ---------
 
-setwd("C:/Users/Lisa/Box/pan_dashboard_data/generate_games_data/")
+setwd("D:/Precision Aging Network/pan_shiny_dashboards/Generate App Data/")
 
 # Load libraries --------------
 

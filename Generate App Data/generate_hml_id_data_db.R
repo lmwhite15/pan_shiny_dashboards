@@ -9,7 +9,7 @@ library(DBI) # Connecting to database
 
 # Set file locations ----------
 
-setwd("C:/Users/Lisa/Box/pan_dashboard_data/db_generate_app_data/")
+setwd("D:/Precision Aging Network/pan_shiny_dashboards/Generate App Data/")
 
 con <- dbConnect(RPostgres::Postgres(),
                  user = 'pan_user',

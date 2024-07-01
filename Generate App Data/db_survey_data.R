@@ -5,7 +5,7 @@ print("######################################")
 
 rm(list = ls())
 
-setwd("C:/Users/Lisa/Box/pan_dashboard_data/db_generate_app_data/")
+setwd("D:/Precision Aging Network/pan_shiny_dashboards/Generate App Data/")
 
 library(DBI) # Connecting to database
 library(tidyverse)
