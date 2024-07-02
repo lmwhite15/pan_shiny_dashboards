@@ -9,7 +9,11 @@ library(DBI) # Connecting to database
 
 # Set file locations ----------
 
-setwd("D:/Precision Aging Network/pan_shiny_dashboards/Generate App Data/")
+if (Sys.info()["sysname"] == "Windows") {
+  setwd("D:/Precision Aging Network/pan_shiny_dashboards/Generate App Data/")
+} else if (Sys.info()["sysname"] == "Linux") {
+  setwd("/data/rscripts/pan_shiny_dashboards/Generate App Data/")
+}
 
 con <- dbConnect(RPostgres::Postgres(),
                  user = 'pan_user',
