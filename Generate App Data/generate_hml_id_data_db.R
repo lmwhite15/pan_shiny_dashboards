@@ -5,16 +5,13 @@ print("######################################")
 
 rm(list = ls())
 
-library(DBI) # Connecting to database
-
 # Set file locations ----------
 
-if (Sys.info()["sysname"] == "Windows") {
-  setwd("D:/Precision Aging Network/pan_shiny_dashboards/Generate App Data/")
-} else if (Sys.info()["sysname"] == "Linux") {
-  setwd("/data/rscripts/pan_shiny_dashboards/Generate App Data/")
-}
+# Set the working directory to the script's directory
+script_dir <- "/data/rscripts/REDCap_ids"
+setwd(script_dir)
 
+library(RPostgres)
 con <- dbConnect(RPostgres::Postgres(),
                  user = 'pan_user',
                  password = 'PANdataBase!',
@@ -24,8 +21,23 @@ con <- dbConnect(RPostgres::Postgres(),
                  sslmode = 'verify-full',
                  sslrootcert = 'rds-ca-2019-root.pem')
 
-# Load Libraries -------------
+# Define Box FTPS details
+# URL encode the path
+encoded_path <- URLencode("[UA BOX Health] MindCrowd Inbound/HML_ID_Assignment/")
 
+# Define the FTPS base URL
+ftps_base_url <- "ftps://ftp.box.com/"
+
+# Combine the base URL with the encoded path
+ftps_url <- paste0(ftps_base_url, encoded_path)
+userpwd <- "tyuhas@arizona.edu:4PanDataBio5!"
+
+# Define the file path on your local system
+local_file <- "hml_id_data.csv"
+output_file_path <- file.path(script_dir, local_file)
+
+# Load Libraries -------------
+library(RCurl)
 library(tidyverse, quietly = T)
 
 # section to connect to Google Drive
@@ -138,9 +150,15 @@ updated_ids <- updated_dat %>%
          !hml_id %in% hml_id_files$hml_id)
 
 if(nrow(updated_ids) > 0){
-  write.csv(updated_ids, file = "C:/Users/Lisa/Box/[UA BOX Health] MindCrowd Inbound/HML_ID_Assignment/hml_id_data.csv",
+  write.csv(updated_ids, file = output_file_path,
             row.names = F)
-  
+  # Upload the file
+  ftpUpload(
+    what = output_file_path,
+    to = paste0(ftps_url, basename(output_file_path)),
+    userpwd = userpwd,
+    verbose = TRUE
+  )
   print("Saved updated data to REDCap ID creation folder.")
 }else{
   print("No updated data to save to REDCap ID creation folder.")
