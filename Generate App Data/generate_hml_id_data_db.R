@@ -37,7 +37,7 @@ userpwd <- Sys.getenv("FTP_PASSWORD")
 
 # Define the file path on your local system
 local_file <- "hml_id_data.csv"
-output_file_path <- file.path(script_dir, local_file)
+output_file_path <- file.path(getwd(), local_file)
 
 # Load Libraries -------------
 library(RCurl)
