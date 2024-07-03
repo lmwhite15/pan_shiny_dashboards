@@ -8,8 +8,11 @@ rm(list = ls())
 # Set file locations ----------
 
 # Set the working directory to the script's directory
-script_dir <- "/data/rscripts/REDCap_ids"
-setwd(script_dir)
+if (Sys.info()["sysname"] == "Windows") {
+  setwd("D:/Precision Aging Network/pan_shiny_dashboards/Generate App Data/")
+} else if (Sys.info()["sysname"] == "Linux") {
+  setwd("/data/rscripts/pan_shiny_dashboards/Generate App Data/")
+}
 
 library(RPostgres)
 con <- dbConnect(RPostgres::Postgres(),
