@@ -29,7 +29,7 @@ options(googledrive_quiet = TRUE)
 
 con <- dbConnect(RPostgres::Postgres(),
                  user = 'pan_user',
-                 password = 'PANdataBase!',
+                 password = Sys.getenv("DB_PASSWORD"),
                  dbname = 'pan_data',
                  host = 'bio5-pan-prod.cluster-c0xzlo6s7duc.us-west-2.rds.amazonaws.com',
                  port = '5432',

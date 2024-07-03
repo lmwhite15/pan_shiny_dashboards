@@ -14,7 +14,7 @@ setwd(script_dir)
 library(RPostgres)
 con <- dbConnect(RPostgres::Postgres(),
                  user = 'pan_user',
-                 password = 'PANdataBase!',
+                 password = Sys.getenv("DB_PASSWORD"),
                  dbname = 'pan_data',
                  host = 'bio5-pan-prod.cluster-c0xzlo6s7duc.us-west-2.rds.amazonaws.com',
                  port = '5432',
@@ -30,7 +30,7 @@ ftps_base_url <- "ftps://ftp.box.com/"
 
 # Combine the base URL with the encoded path
 ftps_url <- paste0(ftps_base_url, encoded_path)
-userpwd <- "tyuhas@arizona.edu:4PanDataBio5!"
+userpwd <- Sys.getenv("FTP_PASSWORD")
 
 # Define the file path on your local system
 local_file <- "hml_id_data.csv"

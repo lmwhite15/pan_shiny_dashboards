@@ -10,3 +10,4 @@ postgres_stuff.R
 *.Rds
 *.dcf
 rsconnect/
+*.Renviron
