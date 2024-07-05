@@ -45,19 +45,6 @@ options(googledrive_quiet = TRUE)
 ```{r load data}
 
 with_drive_quiet(
-  drive_download(as_id("https://drive.google.com/file/d/1EzECr3ExclMk1S_HkwBrE10jGtkKKFcF"), 
-                 overwrite = TRUE)
-)
-load("mindcrowd_screening_data.Rdata")
-
-# Mindcrowd Prescreen population
-prescreen_data <- data %>%
-  rename(paired_associates = task_group) %>%
-  mutate(# Create quarter time variable:
-    day_time = as.Date(created_at, format = "%Y-%m-%d"),
-    quarter_time = paste0(format(day_time, "%Y"), " ", quarters(day_time)))
-
-with_drive_quiet(
   drive_download(as_id("https://drive.google.com/file/d/19n2UvCBF375vVU1bGhVWht7rqZd1uNl0"), 
                  overwrite = TRUE)
 )
@@ -65,8 +52,13 @@ load("hml_redcap_data.Rdata")
 
 all_mindcrowd_data <- mutate(all_mindcrowd_data,
                              race_group = ifelse(race_group == "Hispanic", "Hispanic/Latino", race_group))
-prescreen_data <- mutate(prescreen_data,
-                             race_group = ifelse(race_group == "Hispanic", "Hispanic/Latino", race_group))
+
+prescreen_data <- screening_data %>%
+  rename(paired_associates = task_group) %>%
+  mutate(# Create quarter time variable:
+    day_time = as.Date(created_at, format = "%Y-%m-%d"),
+    quarter_time = paste0(format(day_time, "%Y"), " ", quarters(day_time)),
+    race_group = ifelse(race_group == "Hispanic", "Hispanic/Latino", race_group))
 
 ```
 
@@ -186,7 +178,7 @@ Mindcrowd Population
 Inputs {.sidebar}
 -------------------------------------
 
-#### Last MindCrowd test taken: `r format(max(all_mindcrowd_data$day_time), "%b-%d-%Y")`
+#### Last MindCrowd test taken: `r format(as.Date(max(all_mindcrowd_data$day_time), "%y%m%d"), "%b-%d-%Y")`
 
 ```{r mindcrowd inputs}
 checkboxGroupInput("mindcrowd_vars", h4("Stratification Factors:"),
@@ -222,7 +214,7 @@ Mindcrowd Prescreen Eligible
 Inputs {.sidebar}
 -------------------------------------
 
-#### Last MindCrowd test taken within MindCrowd prescreen eligible: `r format(max(prescreen_data$day_time), "%b-%d-%Y")`
+#### Last MindCrowd test taken within MindCrowd prescreen eligible: `r format(as.Date(max(prescreen_data$day_time), "%y%m%d"), "%b-%d-%Y")`
 
 ```{r prescreen inputs}
 checkboxGroupInput("prescreen_vars", h4("Stratification Factors:"),
@@ -258,7 +250,7 @@ HML Recruited
 Inputs {.sidebar}
 -------------------------------------
 
-#### Data were last pulled from REDCap on: `r format(max(hml_data$update_date), "%b-%d-%Y")`
+#### Data were last pulled from REDCap on: `r format(as.Date(max(hml_data$update_date), "%y%m%d"), "%b-%d-%Y")`
 
 ```{r recruit inputs}
 
@@ -313,7 +305,7 @@ HML Consented
 Inputs {.sidebar}
 -------------------------------------
 
-#### Data were last pulled from REDCap on: `r format(max(hml_data$update_date), "%b-%d-%Y")`
+#### Data were last pulled from REDCap on: `r format(as.Date(max(hml_data$update_date), "%y%m%d"), "%b-%d-%Y")`
 
 ```{r consent inputs}
 checkboxGroupInput("consented_vars", h4("Stratification Factors:"),
