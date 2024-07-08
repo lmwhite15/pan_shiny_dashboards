@@ -154,11 +154,21 @@ files_list <- lapply(files_list, function(x){
   new_x <- x %>% select(-record_id)
 })
 
-print("Saving survey files to Google Drive.")
+batch_data <- dbReadTable(con, "batch_id") %>%
+  # Remove updates from HML ID script
+  mutate(last_digits = str_sub(batchid, start = -3)) %>%
+  filter(last_digits != 999) %>%
+  # Get latest update date
+  filter(batchid == max(batchid))
+
+latest_data_date <- as.Date(batch_data$timestamp[1], format = "%m/%d/%Y") %>%
+  format("%b %d, %Y")
 
 survey_update_date <- format(Sys.Date(), "%b %d, %Y")
 
-save(names, survey_update_date, files_list, survey_data_dictionary, redcap_data,
+print("Saving survey files to Google Drive.")
+
+save(names, latest_data_date, survey_update_date, files_list, survey_data_dictionary, redcap_data,
      file = "pan_survey_files_list.Rdata")
 
 drive_put("pan_survey_files_list.Rdata", 

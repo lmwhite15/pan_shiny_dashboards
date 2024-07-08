@@ -273,9 +273,19 @@ redcap_data <- response_files_list
 
 games_update_date <- format(Sys.Date(), "%b %d, %Y")
 
+batch_data <- dbReadTable(con, "batch_id") %>%
+  # Remove updates from HML ID script
+  mutate(last_digits = str_sub(batchid, start = -3)) %>%
+  filter(last_digits != 999) %>%
+  # Get latest update date
+  filter(batchid == max(batchid))
+
+latest_data_date <- as.Date(batch_data$timestamp[1], format = "%m/%d/%Y") %>%
+  format("%b %d, %Y")
+
 participant_dates <- participant_data %>% select(hml_id, record_id, area, study_start_date) %>% distinct()
 
-save(games_update_date, names, files_list, redcap_data, participant_dates, file = paste0("pan_games_files_list.Rdata"))
+save(latest_data_date, games_update_date, names, files_list, redcap_data, participant_dates, file = paste0("pan_games_files_list.Rdata"))
 
 drive_put("pan_games_files_list.Rdata", path=drive_find(pattern="HML Data", corpus="allDrives"))
 
