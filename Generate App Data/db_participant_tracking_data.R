@@ -239,8 +239,16 @@ consented <- assess %>%
          month_name_time = format(day_time, "%Y %b"),
          quarter_time = paste0(format(day_time, "%Y"), " ", quarters(day_time)))
 
+# Get all screening data for HML ID Assignment
+
+all_screening_data <- create_screening_data(mindcrowd_part_data, memory, dag_area = "Raw")
+
+all_screening_data <- subset(all_screening_data, 
+                             select = c(participant_id_parent, participant_id, 
+                                        sex, age_group, race, hispanic_latino, task_group))
+
 # Save data --------------------
 
-save(all_mindcrowd_data, screening_data, hml_data, consented, file = "hml_redcap_data.Rdata")
+save(all_mindcrowd_data, all_screening_data, screening_data, hml_data, consented, file = "hml_redcap_data.Rdata")
 
 drive_put("hml_redcap_data.Rdata", path=drive_find(pattern="HML Data", corpus="allDrives"))

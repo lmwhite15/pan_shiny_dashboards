@@ -112,14 +112,15 @@ print("Loading screening data.")
 
 # Get all of the screening data from the recruitment dashboard data script
 with_drive_quiet(
-  drive_download(as_id("https://drive.google.com/file/d/1eTpEi3O7JFVuG4GkawK0C_DDOs93qVKW"),
-                 path = "all_screening_data.Rdata",
+  drive_download(as_id("https://drive.google.com/file/d/19n2UvCBF375vVU1bGhVWht7rqZd1uNl0"), 
                  overwrite = TRUE)
 )
-load("all_screening_data.Rdata")
+load("hml_redcap_data.Rdata")
 
 all_dat <- all_screening_data %>%
-  left_join(dat %>% select(participant_id_parent = participant_id, hml_id, hml_id_created_date) %>% distinct(),
+  left_join(dat %>% select(participant_id_parent = participant_id, hml_id, hml_id_created_date) %>% 
+              group_by(participant_id_parent) %>% arrange(hml_id) %>% slice(1) %>% ungroup() %>%
+              distinct(),
             by = "participant_id_parent") %>%
   distinct(participant_id, .keep_all = TRUE) %>%
   mutate(participant_id_parent2 = ifelse(participant_id_parent == participant_id,
