@@ -114,7 +114,7 @@ save_data <- function(production, deidentified_id_dat, hml_id_dat, all_dat){
 
 # Filter IDs by input area areaPick ------
 id_choices <- reactive(
-  filter(dat, area == input$areaPick)
+  filter(dat, area == input$areaPick, !is.na(participant_id))
 )
 
 # Filter data by selected ID idPick -------
