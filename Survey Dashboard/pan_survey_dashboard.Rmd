@@ -414,7 +414,7 @@ output$downloadDataMiami <- downloadHandler(
 {.sidebar}
 ===================
 
-#### Data updated: `r survey_update_date`.
+#### Latest Data: `r latest_data_date`.
 
 ```{r select survey input}
 

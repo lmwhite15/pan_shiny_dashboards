@@ -318,7 +318,7 @@ output$downloadDataMiami <- downloadHandler(
 {.sidebar}
 ===================
 
-#### Data updated: `r games_update_date`.
+#### Latest Data: `r latest_data_date`
 
 ```{r select game input}
 
