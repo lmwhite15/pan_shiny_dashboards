@@ -39,18 +39,28 @@ con <- dbConnect(RPostgres::Postgres(),
 ## Participant data ~~~~
 print("Loading current participants data.")
 
-redcap_participant_data <- dbReadTable(con, "p2_redcap_demographics") %>%
-  mutate(area = case_when(group_id_number == 4669 ~ "atlanta",
-                          group_id_number == 4668 ~ "baltimore",
-                          group_id_number == 4667 ~ "miami",
-                          group_id_number == 4670 ~ "tucson")) %>%
-  select(record_id, hml_id, area)
+# HML IDs and hashed emails
+hml_dat <- dbReadTable(con, "views_hml_match")
 
-## Get hashed emails and attach
-email_dat <- dbReadTable(con, "views_hml_match")
+# Record IDs
+record_id_dat <- dbReadTable(con, "redcap_id_assignment") 
 
-participant_data <- redcap_participant_data %>%
-  left_join(email_dat, by = "hml_id")
+# Recruitment Sites
+site_dat <- dbReadTable(con, "views_recruitment_data") %>% 
+  select(hml_id, site) %>%
+  distinct() %>%
+  # One of the hml_ids has two sites assigned, selecting the non-Tucson one for now
+  # HML0388 has ATL and TUC assigned, so by arranging by site I'm selecting ATL for now
+  group_by(hml_id) %>% arrange(site) %>% slice(1) %>% ungroup()
+
+# Set up participant data
+participant_data <- hml_dat %>%
+  # Add record_ids
+  left_join(record_id_dat, by = c("hml_id", "participant_id_parent")) %>%
+  # Add recruitment sites
+  left_join(site_dat, by = c("hml_id")) %>%
+  select(record_id = redcap_record_id, hml_id, area = site, email) %>%
+  mutate(area = tolower(area))
 
 ## Survey Data ~~~~~
 

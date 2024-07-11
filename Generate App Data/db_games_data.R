@@ -42,27 +42,48 @@ con <- dbConnect(RPostgres::Postgres(),
 
 print("Loading current participants data.")
 
-redcap_participant_data <- dbReadTable(con, "p2_redcap_demographics") %>%
-  mutate(area = case_when(group_id_number == 4669 ~ "atlanta",
-                          group_id_number == 4668 ~ "baltimore",
-                          group_id_number == 4667 ~ "miami",
-                          group_id_number == 4670 ~ "tucson")) %>%
-  select(hml_id, record_id, participant_id_parent, area, api_import_date)
+
+# HML IDs
+hml_dat <- dbReadTable(con, "views_hml_match")
+
+# Record IDs
+record_id_dat <- dbReadTable(con, "redcap_id_assignment") 
+
+# Recruitment Sites
+site_dat <- dbReadTable(con, "views_recruitment_data") %>% 
+  select(hml_id, site) %>%
+  distinct() %>%
+  # One of the hml_ids has two sites assigned, selecting the non-Tucson one for now
+  # HML0388 has ATL and TUC assigned, so by arranging by site I'm selecting ATL for now
+  group_by(hml_id) %>% arrange(site) %>% slice(1) %>% ungroup()
+
+# Get API import date and replace missing sites
+import_date_dat <- dbReadTable(con, "p2_redcap_demographics") %>%
+  mutate(new_site = case_when(group_id_number == 4669 ~ "atlanta",
+                              group_id_number == 4668 ~ "baltimore",
+                              group_id_number == 4667 ~ "miami",
+                              group_id_number == 4670 ~ "tucson")) %>%
+  select(hml_id, api_import_date, new_site)
+
+# Set up participant data
+redcap_participant_data <- hml_dat %>%
+  # Add record_ids
+  left_join(record_id_dat, by = c("hml_id", "participant_id_parent")) %>%
+  # Add recruitment sites
+  left_join(site_dat, by = c("hml_id")) %>%
+  # Add API import date for filtering games by attempt date:
+  left_join(import_date_dat, by = "hml_id") %>%
+  mutate(area = ifelse(is.na(site), new_site, tolower(site))) %>%
+  select(hml_id, record_id = redcap_record_id, participant_id_parent, area, api_import_date)
 
 ## Get participant_ids
 participant_id_dat <- dbReadTable(con, "views_all_ids") %>%
   select(hml_id, participant_id = participant_ids) %>%
   separate_rows(participant_id)
 
-# # Get biometrics completed date (to represent baseline_assessment completion)
-# participant_bio_dat <- dbReadTable(con, "p2_redcap_biometrics") %>%
-#   select(hml_id, bio_completed_by_date)
-
 # Get eligibility date
 participant_elig_dat <- dbReadTable(con, "p2_redcap_consent_form") %>%
   select(hml_id, main_consent_date)
-
-# Attach participant ids and assign date participant started study
 
 ## Date to start relying on hml_id_created_date for study start:
 hml_start_date <- as.Date("2023-10-01")
