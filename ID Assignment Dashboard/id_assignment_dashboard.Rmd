@@ -493,7 +493,7 @@ If you assigned a new HML ID by mistake, please select the participant's HML ID 
 
 # Display IDs from selected area (areaPick) and has an assigned ID
 renderUI({
-  selectInput("idPickUndo", label = "Select the participant's MindCrowd ID.",
+  selectInput("idPickUndo", label = "Select the participant's HML ID.",
               choices = c("",id_choices_undo()$hml_id), selected = NULL)
 })
 
