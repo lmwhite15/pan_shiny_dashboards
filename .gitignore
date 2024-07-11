@@ -12,3 +12,4 @@ postgres_stuff.R
 rsconnect/
 *.Renviron
 *.zip
+*setting_renviron.R
