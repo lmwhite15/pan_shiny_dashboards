@@ -46,12 +46,8 @@ hml_dat <- dbReadTable(con, "views_hml_match")
 record_id_dat <- dbReadTable(con, "redcap_id_assignment") 
 
 # Recruitment Sites
-site_dat <- dbReadTable(con, "views_recruitment_data") %>% 
-  select(hml_id, site) %>%
-  distinct() %>%
-  # One of the hml_ids has two sites assigned, selecting the non-Tucson one for now
-  # HML0388 has ATL and TUC assigned, so by arranging by site I'm selecting ATL for now
-  group_by(hml_id) %>% arrange(site) %>% slice(1) %>% ungroup()
+site_dat <- dbReadTable(con, "info_hml_id_data") %>% 
+  select(hml_id, area)
 
 # Set up participant data
 participant_data <- hml_dat %>%
@@ -59,7 +55,7 @@ participant_data <- hml_dat %>%
   left_join(record_id_dat, by = c("hml_id", "participant_id_parent")) %>%
   # Add recruitment sites
   left_join(site_dat, by = c("hml_id")) %>%
-  select(record_id = redcap_record_id, hml_id, area = site, email) %>%
+  select(record_id = redcap_record_id, hml_id, area, email) %>%
   mutate(area = tolower(area))
 
 ## Survey Data ~~~~~

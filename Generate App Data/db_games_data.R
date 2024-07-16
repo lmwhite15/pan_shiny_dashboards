@@ -50,20 +50,12 @@ hml_dat <- dbReadTable(con, "views_hml_match")
 record_id_dat <- dbReadTable(con, "redcap_id_assignment") 
 
 # Recruitment Sites
-site_dat <- dbReadTable(con, "views_recruitment_data") %>% 
-  select(hml_id, site) %>%
-  distinct() %>%
-  # One of the hml_ids has two sites assigned, selecting the non-Tucson one for now
-  # HML0388 has ATL and TUC assigned, so by arranging by site I'm selecting ATL for now
-  group_by(hml_id) %>% arrange(site) %>% slice(1) %>% ungroup()
+site_dat <- dbReadTable(con, "info_hml_id_data") %>%
+  select(hml_id, area)
 
 # Get API import date and replace missing sites
 import_date_dat <- dbReadTable(con, "p2_redcap_demographics") %>%
-  mutate(new_site = case_when(group_id_number == 4669 ~ "atlanta",
-                              group_id_number == 4668 ~ "baltimore",
-                              group_id_number == 4667 ~ "miami",
-                              group_id_number == 4670 ~ "tucson")) %>%
-  select(hml_id, api_import_date, new_site)
+  select(hml_id, api_import_date)
 
 # Set up participant data
 redcap_participant_data <- hml_dat %>%
@@ -73,7 +65,6 @@ redcap_participant_data <- hml_dat %>%
   left_join(site_dat, by = c("hml_id")) %>%
   # Add API import date for filtering games by attempt date:
   left_join(import_date_dat, by = "hml_id") %>%
-  mutate(area = ifelse(is.na(site), new_site, tolower(site))) %>%
   select(hml_id, record_id = redcap_record_id, participant_id_parent, area, api_import_date)
 
 ## Get participant_ids
