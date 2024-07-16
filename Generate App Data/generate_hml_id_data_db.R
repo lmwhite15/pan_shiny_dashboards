@@ -11,11 +11,6 @@ library(tidyverse, quietly = T)
 library(googledrive)
 library(RPostgres)
 
-# file with info for service account 
-googledrive::drive_auth(path = "pan-mindcrowd-uploads-d9b7ecb93e53.json")
-# Option to silence the messages coming from the Google Drive library
-options(googledrive_quiet = TRUE)
-
 # Set file locations ----------
 
 # Set the working directory to the script's directory
@@ -24,6 +19,11 @@ if (Sys.info()["sysname"] == "Windows") {
 } else if (Sys.info()["sysname"] == "Linux") {
   setwd("/data/rscripts/pan_shiny_dashboards/Generate App Data/")
 }
+
+# file with info for service account 
+googledrive::drive_auth(path = "pan-mindcrowd-uploads-d9b7ecb93e53.json")
+# Option to silence the messages coming from the Google Drive library
+options(googledrive_quiet = TRUE)
 
 # Connect to PAN db
 con <- dbConnect(RPostgres::Postgres(),
