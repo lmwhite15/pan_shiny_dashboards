@@ -392,7 +392,7 @@ Row
 ```{r select id for tucson}
 
 selectInput("idPick_tucson", label = "Select a participant ID to view game information.",
-            choices = c(overall_attempted$hml_id[overall_attempted$area == "tucson"]))
+            choices = c(overall_attempted$hml_id[overall_attempted$area == "Tucson"]))
 
 renderUI({downloadButton("downloadDataTucson", "Download Participant Data")})
 
@@ -436,7 +436,7 @@ Row
 ```{r select id for atlanta}
 
 selectInput("idPick", label = "Select a participant ID to view game information.",
-            choices = c(overall_attempted$hml_id[overall_attempted$area == "atlanta"]))
+            choices = c(overall_attempted$hml_id[overall_attempted$area == "Atlanta"]))
 
 renderUI({downloadButton("downloadDataAtlanta", "Download Participant Data")})
 
@@ -480,7 +480,7 @@ Row
 ```{r select id for baltimore}
 
 selectInput("idPick_baltimore", label = "Select a participant ID to view game information.",
-            choices = c(overall_attempted$hml_id[overall_attempted$area == "baltimore"]))
+            choices = c(overall_attempted$hml_id[overall_attempted$area == "Baltimore"]))
 
 renderUI({downloadButton("downloadDataBaltimore", "Download Participant Data")})
 
@@ -524,7 +524,7 @@ Row
 ```{r select id for miami}
 
 selectInput("idPick_miami", label = "Select a participant ID to view game information.",
-            choices = c(overall_attempted$hml_id[overall_attempted$area == "miami"]))
+            choices = c(overall_attempted$hml_id[overall_attempted$area == "Miami"]))
 
 renderUI({downloadButton("downloadDataMiami", "Download Participant Data")})
 
