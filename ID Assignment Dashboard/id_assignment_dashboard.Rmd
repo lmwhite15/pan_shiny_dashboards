@@ -52,57 +52,30 @@ production <- TRUE
 
 ```{r load data}
 
-# Downloads deidentified_id_data.csv and all_screening_data_processed.Rdata and overwrites existing files
 # If not in production, will download files from local folder
-
 if(production){
   with_drive_quiet(
     drive_download(as_id("https://drive.google.com/file/d/1NWUkcoIRuHBlw1h6_LWRlNpQSTcNa3fr"),
                    overwrite = TRUE)
   )
-  load_data <- readRDS("generate_hml_id_dat.Rds")
-  
-  dat <- load_data$dat
-  all_dat <- load_data$all_dat
-  
-  # Code to send data to Box
-  # con <- textConnection(getURL(hmlfile, userpwd=logininfo, ftp.ssl=TRUE, 
-  #                              ftp.use.epsv=FALSE, ftp.skip.pasv.ip=TRUE))
-  # dat <- read.csv(con, header = T)
-  
-}else{
-  with_drive_quiet(
-    drive_download(as_id("https://drive.google.com/file/d/1UQVR0ri2KUlnMyl92pZSn5dnTL_XJzeN"),
-                   overwrite = TRUE)
-  )
-  load_data <- readRDS("generate_hml_id_dat_test.Rds")
-  
-  dat <- load_data$dat
-  all_dat <- load_data$all_dat
-  
 }
+
+load_data <- readRDS("generate_hml_id_dat.Rds")
+
+dat <- load_data$dat
+all_dat <- load_data$all_dat
 
 ```
 
 ```{r save data}
 
-save_data <- function(production, deidentified_id_dat, hml_id_dat, all_dat){
-  
-  if(production){
-    # Saves the modified files to HML Data shared drive
-    saveRDS(list(dat = deidentified_id_dat,
+save_data <- function(production, deidentified_id_dat, all_dat){
+  saveRDS(list(dat = deidentified_id_dat,
                  all_dat = all_dat),
             file = "generate_hml_id_dat.Rds")
-    
-    drive_put("generate_hml_id_dat.Rds", path=drive_find(pattern="HML Data", corpus="allDrives"))
-  }else{
-    
-    saveRDS(list(dat = deidentified_id_dat,
-                 all_dat = all_dat),
-            file = "generate_hml_id_dat_test.Rds")
-    
-    drive_put("generate_hml_id_dat_test.Rds", path=drive_find(pattern="HML Data", corpus="allDrives"))
-  }
+  
+  # If in production then save in Drive
+  if(production){drive_put("generate_hml_id_dat.Rds", path=drive_find(pattern="HML Data", corpus="allDrives"))}
   
   # Pop up status message and page reload
   shinyalert::shinyalert('Saved', callbackJS = "function() {location.reload()}")
@@ -149,7 +122,13 @@ new_data <- reactive({
 downloadNewData <- observe({
   if(isTruthy(input$saveId)){
     
-    new_download <- new_data()
+    new_download <- new_data() %>%
+      # Get actual participant_id_parent
+      left_join(select(all_dat, participant_id_parent, alternative_id), 
+                by = c("participant_id" = "alternative_id")) %>%
+      mutate(participant_id = participant_id_parent) %>%
+      select(-participant_id_parent) %>%
+      distinct()
     
     # Update the all screening data so we don't overwrite any IDs
     all_dat <- all_dat %>%
@@ -163,7 +142,6 @@ downloadNewData <- observe({
     # Save data
     save_data(production, 
               deidentified_id_dat = new_download, 
-              hml_id_dat = filter(new_download, !is.na(hml_id)) %>% select(-hml_id_undo), 
               all_dat = all_dat)
   }
 })
@@ -219,10 +197,8 @@ new_id_data <- reactive({
   
   # Check if ID already has HML
   
-  check_data <- left_join(id_data[1], all_dat, by = c("id" = "alternative_id")) %>%
-    # Add in area if already has HMl ID assigned from recruitment area
-    left_join(select(dat, participant_id_parent = participant_id, area, hml_id_undo), by = "participant_id_parent")
-
+  check_data <- left_join(id_data[1], all_dat, by = c("id" = "alternative_id")) 
+  
   existing_ids <- as.numeric(str_sub(c(dat$hml_id, dat$hml_id_undo), start = 4))
   existing_ids <- existing_ids[which(!is.na(existing_ids))]
   
@@ -246,7 +222,7 @@ new_id_data <- reactive({
   # Add new HML IDs to submitted data list
   new_id_dat <- check_data %>%
     select(-starts_with("hml_id")) %>%
-    mutate(area = ifelse(is.na(area), input$area_up, area)) %>%
+    mutate(area = input$area_up) %>%
     left_join(new_ids, by = "participant_id_parent")
   
   new_id_dat
@@ -270,7 +246,7 @@ downloadManualData <- observe({
               mutate(hml_id_undo = NA))
     
     # Update the all screening data so we don't overwrite any IDs
-    all_dat <- all_dat %>%
+    new_all_dat <- all_dat %>%
       left_join(new_id_dat %>% select(participant_id_parent, hml_id, hml_id_created_date),
                 by = "participant_id_parent") %>%
       mutate(hml_id = coalesce(hml_id.x, hml_id.y),
@@ -279,8 +255,7 @@ downloadManualData <- observe({
     
     save_data(production,
               deidentified_id_dat = down_id_dat,
-              hml_id_dat = filter(down_id_dat, !is.na(hml_id)) %>% select(-hml_id_undo),
-              all_dat = all_dat)
+              all_dat = new_all_dat)
   }
 })
 
@@ -313,7 +288,7 @@ radioButtons("areaPick", label = "Please select the participant's recruitment ar
 
 # Display IDs from selected area (areaPick)
 renderUI(
-  selectInput("idPick", label = "Select the participant's MindCrowd ID.",
+  selectizeInput("idPick", label = "Select the participant's MindCrowd ID.",
               choices = c("",id_choices()$participant_id), selected = NULL)
 )
 
