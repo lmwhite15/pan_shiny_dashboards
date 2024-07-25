@@ -53,7 +53,7 @@ record_id_dat <- dbReadTable(con, "redcap_id_assignment")
 site_dat <- dbReadTable(con, "info_hml_id_data") %>%
   select(hml_id, area)
 
-# Get API import date and replace missing sites
+# Get API import dates
 import_date_dat <- dbReadTable(con, "p2_redcap_demographics") %>%
   select(hml_id, api_import_date)
 
@@ -123,7 +123,7 @@ files_list <- lapply(raw_files_list, function(x){
     left_join(recent_x, by = "participant_id") %>%
     select(hml_id, area, everything()) %>%
     filter(!is.na(created_date_game_result)) %>%
-    filter(created_date_game_result >= study_start_date) %>%
+    # filter(created_date_game_result >= study_start_date) %>%
     mutate(across(-c(created_date_game_result, record_id), ~ifelse(is.na(.), "", .))) %>%
     mutate(created_date_game_result = as.Date(created_date_game_result))
   
