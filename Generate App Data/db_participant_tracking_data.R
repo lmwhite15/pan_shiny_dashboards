@@ -126,7 +126,7 @@ mindcrowd_data <- participants_subset %>%
                              age %in% 50:64 ~ "50-64",
                              age %in% 65:74 ~ "65-74",
                              age >= 75 ~ "75+"),
-         education_attainment_bin = case_when(highest_education_level_completed %in% c("Completed 8th Grade (Elementary or Primary School Graduate)", "Up to 8 years", 
+         education_attainment_bin = case_when(highest_education_level_completed %in% c("Completed 8th Grade (Elementary or Primary School Graduate)", "Up to 8 Years", 
                                                                                        "Some High School", "High School Diploma (Baccalaureate)") ~ "1 & 2",
                                               highest_education_level_completed %in% c("Some College (Some University)") ~ "3",
                                               highest_education_level_completed %in% c("College Degree (University Graduate)") ~ "4",
