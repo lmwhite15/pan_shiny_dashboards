@@ -76,18 +76,19 @@ participant_id_dat <- dbReadTable(con, "views_all_ids") %>%
 participant_elig_dat <- dbReadTable(con, "p2_redcap_consent_form") %>%
   select(hml_id, main_consent_date)
 
-## Date to start relying on hml_id_created_date for study start:
+## HML ID app created date
 hml_start_date <- as.Date("2023-10-01")
 
 participant_data <- redcap_participant_data %>%
   left_join(participant_id_dat, by = "hml_id") %>%
   left_join(participant_elig_dat, by = "hml_id") %>%
-  # mutate(study_start_date = case_when(api_import_date < hml_start_date & api_import_date < bio_completed_by_date ~ api_import_date,
-  #                                    api_import_date < hml_start_date & api_import_date >= bio_completed_by_date ~ bio_completed_by_date,
-  #                                    TRUE ~ api_import_date)) %>%
-  mutate(study_start_date = case_when(api_import_date < hml_start_date & api_import_date < main_consent_date ~ api_import_date,
-                                      api_import_date < hml_start_date & api_import_date >= main_consent_date ~ main_consent_date,
-                                      TRUE ~ api_import_date)) %>%
+  mutate(study_start_date = case_when(
+    # Participant recruited before HML ID app created (choosing whichever date comes first)
+    api_import_date < hml_start_date & api_import_date < main_consent_date ~ as.Date(api_import_date)-31,
+    api_import_date < hml_start_date & api_import_date >= main_consent_date ~ as.Date(main_consent_date)-31,
+    # Participant recruited after app was created
+    TRUE ~ as.Date(api_import_date)-31)
+  ) %>%
   select(-c(api_import_date, main_consent_date))
 
 ## Load responses data
@@ -123,7 +124,7 @@ files_list <- lapply(raw_files_list, function(x){
     left_join(recent_x, by = "participant_id") %>%
     select(hml_id, area, everything()) %>%
     filter(!is.na(created_date_game_result)) %>%
-    # filter(created_date_game_result >= study_start_date) %>%
+    filter(created_date_game_result >= study_start_date) %>%
     mutate(across(-c(created_date_game_result, record_id), ~ifelse(is.na(.), "", .))) %>%
     mutate(created_date_game_result = as.Date(created_date_game_result))
   
