@@ -103,14 +103,15 @@ updated_dat <- new_dat %>%
   filter(!participant_id %in% dat$participant_id) %>%
   rbind(dat) %>%
   group_by(participant_id) %>% arrange(hml_id) %>% slice(1) %>% ungroup() %>%
-  # Get correct participant_id_parent
-  left_join(select(all_screening_data, participant_id_parent, participant_id) %>% distinct(), by = "participant_id") %>%
-  mutate(participant_id = participant_id_parent) %>%
-  distinct(participant_id, .keep_all = TRUE) %>%
-  select(-participant_id_parent)
+  # # Get correct participant_id_parent
+  # left_join(select(all_screening_data, participant_id_parent, participant_id) %>% distinct(), by = "participant_id") %>%
+  # App is expecting participant_id, not participant_id_parent (should fix this though)
+  # mutate(participant_id = participant_id_parent) %>%
+  distinct(participant_id, .keep_all = TRUE) # %>% select(-participant_id_parent)
 
 # Create data for manual ID update ---------------
 
+# Create data with hml_id info to add to all_dat
 updated_dat_add <- updated_dat %>%
   mutate(participant_id_parent = participant_id) %>%
   rename(task_group = memory_rank) %>%
