@@ -197,7 +197,9 @@ new_id_data <- reactive({
   
   # Check if ID already has HML
   
-  check_data <- left_join(id_data[1], all_dat, by = c("id" = "alternative_id")) 
+  check_data <- left_join(id_data[1], all_dat, by = c("id" = "alternative_id")) %>%
+    # Assign participant_id_parent if not in data
+    mutate(participant_id_parent = ifelse(is.na(participant_id_parent), id, participant_id_parent))
   
   existing_ids <- as.numeric(str_sub(c(dat$hml_id, dat$hml_id_undo), start = 4))
   existing_ids <- existing_ids[which(!is.na(existing_ids))]
