@@ -249,7 +249,7 @@ downloadManualData <- observe({
     
     # Update the all screening data so we don't overwrite any IDs
     new_all_dat <- all_dat %>%
-      left_join(new_id_dat %>% select(participant_id_parent, hml_id, hml_id_created_date),
+      full_join(new_id_dat %>% select(participant_id_parent, hml_id, hml_id_created_date),
                 by = "participant_id_parent") %>%
       mutate(hml_id = coalesce(hml_id.x, hml_id.y),
              hml_id_created_date = coalesce(hml_id_created_date.x, hml_id_created_date.y)) %>%
