@@ -51,11 +51,7 @@ record_id_dat <- dbReadTable(con, "redcap_id_assignment")
 
 # Recruitment Sites
 site_dat <- dbReadTable(con, "info_hml_id_data") %>%
-  select(hml_id, area)
-
-# Get API import dates
-import_date_dat <- dbReadTable(con, "p2_redcap_demographics") %>%
-  select(hml_id, api_import_date)
+  select(hml_id, area, hml_id_created_date)
 
 # Set up participant data
 redcap_participant_data <- hml_dat %>%
@@ -63,9 +59,7 @@ redcap_participant_data <- hml_dat %>%
   left_join(record_id_dat, by = c("hml_id", "participant_id_parent")) %>%
   # Add recruitment sites
   left_join(site_dat, by = c("hml_id")) %>%
-  # Add API import date for filtering games by attempt date:
-  left_join(import_date_dat, by = "hml_id") %>%
-  select(hml_id, record_id = redcap_record_id, participant_id_parent, area, api_import_date)
+  select(hml_id, record_id = redcap_record_id, participant_id_parent, area, hml_id_created_date)
 
 ## Get participant_ids
 participant_id_dat <- dbReadTable(con, "views_all_ids") %>%
@@ -79,17 +73,23 @@ participant_elig_dat <- dbReadTable(con, "p2_redcap_consent_form") %>%
 ## HML ID app created date
 hml_start_date <- as.Date("2023-10-01")
 
+date_buffer <- 90
+
 participant_data <- redcap_participant_data %>%
   left_join(participant_id_dat, by = "hml_id") %>%
   left_join(participant_elig_dat, by = "hml_id") %>%
   mutate(study_start_date = case_when(
     # Participant recruited before HML ID app created (choosing whichever date comes first)
-    api_import_date < hml_start_date & api_import_date < main_consent_date ~ as.Date(api_import_date)-31,
-    api_import_date < hml_start_date & api_import_date >= main_consent_date ~ as.Date(main_consent_date)-31,
+    hml_id_created_date < hml_start_date & hml_id_created_date < main_consent_date ~ as.Date(hml_id_created_date)-date_buffer,
+    hml_id_created_date < hml_start_date & hml_id_created_date >= main_consent_date ~ as.Date(main_consent_date)-date_buffer,
     # Participant recruited after app was created
-    TRUE ~ as.Date(api_import_date)-31)
+    TRUE ~ as.Date(hml_id_created_date)-date_buffer)
   ) %>%
-  select(-c(api_import_date, main_consent_date))
+  #######################
+  mutate(study_start_date = ifelse(is.na(study_start_date), 
+                                   as.character(as.Date(format(Sys.Date(), "%Y-%m-%d"))-date_buffer), 
+                                   as.character(study_start_date))) %>%
+  select(-c(hml_id_created_date, main_consent_date))
 
 ## Load responses data
 
@@ -107,7 +107,6 @@ names(response_files_list) <- c("word_pairs", "keep_track", "shapes", "faces_nam
 
 # Format games data ----------------------
 
-# Capitalize all email addresses to make matching easier and select most recent game
 # Match games to participant data within recruitment areas
 
 files_list <- lapply(raw_files_list, function(x){
