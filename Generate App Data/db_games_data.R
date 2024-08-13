@@ -53,6 +53,10 @@ record_id_dat <- dbReadTable(con, "redcap_id_assignment")
 site_dat <- dbReadTable(con, "info_hml_id_data") %>%
   select(hml_id, area, hml_id_created_date)
 
+# Adding in HML0538
+site_dat <- rbind(site_dat, c("HML0538", "Tucson", "2024-07-29")) %>%
+  distinct()
+
 # Set up participant data
 redcap_participant_data <- hml_dat %>%
   # Add record_ids
