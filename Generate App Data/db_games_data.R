@@ -77,7 +77,7 @@ participant_elig_dat <- dbReadTable(con, "p2_redcap_consent_form") %>%
 ## HML ID app created date
 hml_start_date <- as.Date("2023-10-01")
 
-date_buffer <- 90
+date_buffer <- 120
 
 participant_data <- redcap_participant_data %>%
   left_join(participant_id_dat, by = "hml_id") %>%
