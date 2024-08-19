@@ -80,9 +80,10 @@ latest_data_date <- info_from_redcap$updated[1]
 
 hml_ids <- info_from_redcap %>%
   select(hml_id, record_id, site) %>%
-  arrange(hml_id) %>%
-  # Adding in HML0538
-  rbind(c("HML0538", 530, "Tucson"))
+  arrange(hml_id)
+  # # Adding in HML0538
+  # rbind(c("HML0538", 530, "Tucson")) %>%
+  # distinct()
 
 # Get surveys --------------
 survey_names <- c("adl", "anxiety", "brain_disease", "covid", "diet", "fhad", 
@@ -99,24 +100,48 @@ names(raw_files_list) <- survey_names
 
 ```{r format surveys}
 
-files_list <- lapply(raw_files_list, function(x){
-  
-  # Fixing HML0538 (003Vu00000MtrjrIAB)
-  x$hml_id[which(x$participant_id == "003Vu00000MtrjrIAB")] <- "HML0538"
-  x$record_id[which(x$participant_id == "003Vu00000MtrjrIAB")] <- "530"
-  x$site[which(x$participant_id == "003Vu00000MtrjrIAB")] <- "Tucson"
-  
-  new_x <- hml_ids %>%
-    left_join(x, by = c("record_id", "hml_id", "site")) %>%
-    select(record_id, hml_id, site, everything(),
-           -c(survey_id, email, contains("participant_id"), -p2_participant)) %>%
-    mutate(across(-c(created_date_survey, hml_id), ~ifelse(!is.na(created_date_survey) & is.na(.), "", .))) %>%
-    mutate(created_date_survey = as.Date(created_date_survey)) %>%
+raw_files_list_edit <- lapply(raw_files_list, function(x){
+
+  new_x <- x  %>%
     # Filter only participants
-    filter(!is.na(hml_id))
+    filter(!is.na(hml_id)) %>%
+    # Replace NAs with blanks for REDCap import file
+    mutate(across(-c(created_date_survey), ~ifelse(!is.na(created_date_survey) & is.na(.), "", .))) %>%
+    # Set variable as date format
+    # mutate(created_date_survey = as.Date(created_date_survey, format = "%Y-%m-%d %")) %>%
+    select(record_id, hml_id, site, everything(),
+           -c(survey_id, email, contains("participant_id"), -p2_participant))
+  
   if(sum(colnames(new_x) %in% c("Last Modified Date", "Not Listed", "Not.Listed", "Last.Modified.Date")) > 0){
     new_x <- new_x[-which(colnames(new_x) %in% c("Last Modified Date", "Not Listed", "Not.Listed", "Last.Modified.Date"))]
   }
+
+  
+  new_x
+})
+
+# Check logic branches to determine whether data is actually missing or just not applicable
+raw_files_list_edit  <- survey_logic_branching(raw_files_list_edit)
+
+files_list <- lapply(raw_files_list_edit, function(x){
+  complete_x <- x %>%
+    mutate(across(-c(hml_id, record_id, site, created_date_survey), 
+                  ~ifelse(is.na(.) | . == "", 1, 0))) %>%
+    mutate(missing = select(., -c(hml_id, record_id, site, created_date_survey)) %>%
+             rowSums(na.rm = T),
+           completed = ifelse(!is.na(select(., created_date_survey)) & missing == 0, "Completed", "Not Completed")) %>%
+    select(hml_id, completed, site, created_date_survey) %>%
+    filter(!is.na(site) & site != "") %>%
+    # Get most recent, completed survey if available, otherwise select most recent survey
+    slice_max(order_by = created_date_survey, by = c(hml_id, completed), with_ties = FALSE) %>%
+    # If an ID has 2 rows after the slice, then they have both complete and incomplete attempts,
+    # so, for those people, we only select the completed survey
+    group_by(hml_id) %>% mutate(n = n()) %>%
+    filter((n == 1) | (n == 2 & completed == "Completed")) %>%
+    select(-n)
+  
+  new_x <- complete_x %>%
+    left_join(x, by = join_by(hml_id, site, created_date_survey))
   
   # Get survey name
   survey_name <- names(new_x)[str_detect(names(new_x), "_v1.")][1]
@@ -125,12 +150,18 @@ files_list <- lapply(raw_files_list, function(x){
   # Rename timestamp variable
   colnames(new_x)[which(colnames(new_x) == "created_date_survey")] <- paste0(survey_name, "_", "timestamp")
   
+  # Rename complete variable
+  colnames(new_x)[which(colnames(new_x) == "completed")] <- paste0(survey_name, "_", "completed")
+  
   # Reorder variables
-  item_list <- names(new_x)[which(str_detect(names(new_x), survey_name) & !endsWith(names(new_x), "timestamp"))]
+  item_list <- names(new_x)[which(str_detect(names(new_x), survey_name) 
+                                  & !endsWith(names(new_x), "timestamp")
+                                  & !endsWith(names(new_x), "completed"))]
   max_item_number <- max(as.numeric(str_extract(item_list, "(?<=\\.)\\d+$")))
   
-  new_x <- new_x %>%
-    select(record_id, hml_id, site, contains("_timestamp"),
+  new_x <- hml_ids %>%
+    left_join(new_x, by = join_by(hml_id, record_id, site)) %>%
+    select(hml_id, site, contains("_completed"), record_id, contains("_timestamp"),
            paste0(survey_name, "_v1.0.", 1:max_item_number)) %>%
     mutate(site = str_to_title(site)) %>%
     distinct() %>%
@@ -139,9 +170,6 @@ files_list <- lapply(raw_files_list, function(x){
   new_x
 })
 
-# Check logic branches to determine whether data is actually missing or just not applicable
-files_list  <- survey_logic_branching(files_list)
-
 ```
 
 
@@ -149,31 +177,17 @@ files_list  <- survey_logic_branching(files_list)
 
 complete_files_list <- lapply(files_list, function(x){
   new_x <- x %>%
-    mutate(across(-c(hml_id, site, ends_with("_timestamp")), 
-                  ~ifelse(is.na(.) | . == "", 1, 0))) %>%
-    mutate(missing = select(., -c(hml_id, site, ends_with("_timestamp"))) %>%
-             rowSums(na.rm = T),
-           completed = ifelse(!is.na(select(., ends_with("_timestamp"))) & missing == 0, "Completed", "Not Completed")) %>%
-    select(hml_id, site, completed, everything(), -c(record_id, missing)) %>%
-    rename(!!paste0(str_extract(names(.)[ncol(.)], ".*(?=_)"), "_completed") := completed) %>%
-    filter(!is.na(site) & site != "")
-  
-  new_x
+    select(hml_id, site, contains("_completed"))
 })
+
 
 ```
 
 ```{r overall survey calculations}
 
 # Create "Overall Attempted" Table Data ---------
-overall_attempted <- complete_files_list[[1]][1:3]
-
-for(i in 2:length(complete_files_list)){
-  overall_attempted <- merge(overall_attempted,
-                             complete_files_list[[i]][1:3],
-                             all = T,
-                             by = c("hml_id", "site"))
-}
+overall_attempted <- reduce(complete_files_list, full_join, by = c("hml_id", "site")) %>%
+  mutate(across(-c(hml_id, site), ~ifelse(is.na(.), "Not Completed", .)))
 
 # Format "Overall Attempted" Table ----
 overall_attempted_table <- overall_attempted %>%
@@ -193,20 +207,16 @@ overall_attempted_table <- overall_attempted %>%
   mutate(survey = str_replace(survey, "_.*", "")) %>%
   ungroup()
 
-overall_attempted_time <- files_list[[1]][2:4]
+overall_attempted_time <- files_list[[1]] %>% select(hml_id, site, contains("timestamp"))
 
 for(i in 2:length(files_list)){
   overall_attempted_time <- merge(overall_attempted_time,
-                             files_list[[i]][2:4],
+                             files_list[[i]] %>% select(hml_id, site, contains("timestamp")),
                              all = T,
                              by = c("hml_id", "site"))%>%
     filter(!is.na(site) & site != "")
 }
 
-overall_time <- overall_attempted_time %>%
-  mutate(across(-c(hml_id, site), as.Date)) %>%
-  pivot_longer(cols = -c(hml_id, site)) %>%
-  arrange(desc(value))
 
 ```
 
@@ -377,7 +387,7 @@ table_function <- function(picked_site = "All", survey = "All", picked_id = "All
       }else{ # Look at specific answers for a participant
         files_list[[survey]] %>%
           filter(site == picked_site, hml_id == picked_id) %>%
-          select(-c(hml_id, record_id, site, ends_with("_timestamp"))) %>%
+          select(-c(hml_id, record_id, site, ends_with("_timestamp"), ends_with("_completed"))) %>%
           select(paste0(str_extract(names(.), ".*(?=_)"), "_v1.0.", 1:ncol(.))) %>%
           mutate_all(as.character) %>%
           pivot_longer(cols = everything(),
@@ -421,6 +431,7 @@ download_data_function <- function(picked_id){
         filter(hml_id == picked_id) %>%
         left_join(completed_x, by = "record_id") %>%
         mutate(record_id = as.character(record_id)) %>%
+        select(-contains("_completed")) %>%
         select(record_id, hml_id,
                contains("_timestamp"),
                paste0(str_extract(names(.)[ncol(.)], ".*(?=_)"), "_v1.0.", 1:(ncol(.)-5)),
