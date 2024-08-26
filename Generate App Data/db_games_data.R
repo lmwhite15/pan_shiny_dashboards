@@ -35,37 +35,23 @@ con <- dbConnect(RPostgres::Postgres(),
                  dbname = 'pan_data',
                  host = 'bio5-pan-prod.cluster-c0xzlo6s7duc.us-west-2.rds.amazonaws.com',
                  port = '5432',
-                 sslmode = 'verify-full',
-                 sslrootcert = 'rds-ca-2019-root.pem')
+                 # sslmode = 'verify-full',
+                 sslrootcert = 'global-bundle.pem')
 
 # Load data --------------------
 
 print("Loading current participants data.")
 
-
-# HML IDs
-hml_dat <- dbReadTable(con, "views_hml_match")
-
-# Record IDs
-record_id_dat <- dbReadTable(con, "redcap_id_assignment") 
-
-# Recruitment Sites
+# HML ID Created Dates
 site_dat <- dbReadTable(con, "info_hml_id_data") %>%
-  select(hml_id, area, hml_id_created_date)
-
-# Adding in HML0538
-site_dat <- rbind(site_dat, c("HML0538", "Tucson", "2024-07-29")) %>%
-  distinct()
+  select(hml_id, hml_id_created_date)
 
 # Set up participant data
-redcap_participant_data <- hml_dat %>%
-  # Add record_ids
-  left_join(record_id_dat, by = c("hml_id", "participant_id_parent")) %>%
-  # Add recruitment sites
-  left_join(site_dat, by = c("hml_id")) %>%
-  select(hml_id, record_id = redcap_record_id, participant_id_parent, area, hml_id_created_date)
+redcap_participant_data <- dbReadTable(con, "info_from_redcap") %>%
+  select(hml_id, record_id, participant_id_parent, area = site) %>%
+  left_join(site_dat, by = "hml_id")
 
-## Get participant_ids
+## Get secondary participant_ids
 participant_id_dat <- dbReadTable(con, "views_all_ids") %>%
   select(hml_id, participant_id = participant_ids) %>%
   separate_rows(participant_id)

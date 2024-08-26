@@ -32,8 +32,8 @@ con <- dbConnect(RPostgres::Postgres(),
                  dbname = 'pan_data',
                  host = 'bio5-pan-prod.cluster-c0xzlo6s7duc.us-west-2.rds.amazonaws.com',
                  port = '5432',
-                 sslmode = 'verify-full',
-                 sslrootcert = 'rds-ca-2019-root.pem')
+                 # sslmode = 'verify-full',
+                 sslrootcert = 'global-bundle.pem')
 
 # Define Box FTPS details
 # URL encode the path

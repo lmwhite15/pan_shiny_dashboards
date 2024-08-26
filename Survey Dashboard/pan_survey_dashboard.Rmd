@@ -56,8 +56,8 @@ if(production){
                    , dbname = Sys.getenv("dbname")
                    , host = Sys.getenv("host")
                    , port = Sys.getenv("port")
-                   , sslmode = 'verify-full'
-                   , sslrootcert = 'rds-ca-2019-root.pem'
+                   # , sslmode = 'verify-full'
+                   , sslrootcert = 'global-bundle.pem'
   )
 }
 
