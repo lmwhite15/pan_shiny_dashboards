@@ -74,16 +74,9 @@ theme_set(theme_bw())
 ```{r load data}
 
 # Get HML IDs --------------
-info_from_redcap <- dbReadTable(con, "info_from_redcap") 
-
-latest_data_date <- info_from_redcap$updated[1]
-
-hml_ids <- info_from_redcap %>%
+hml_ids <- dbReadTable(con, "info_from_redcap") %>%
   select(hml_id, record_id, site) %>%
   arrange(hml_id)
-  # # Adding in HML0538
-  # rbind(c("HML0538", 530, "Tucson")) %>%
-  # distinct()
 
 # Get surveys --------------
 survey_names <- c("adl", "anxiety", "brain_disease", "covid", "diet", "fhad", 
@@ -95,6 +88,17 @@ raw_files_list <- lapply(survey_names,
                              mutate_all(~ifelse(. == "", NA, .))
                          })
 names(raw_files_list) <- survey_names
+
+# Get update date --------
+batch_data <- dbReadTable(con, "batch_id") %>%
+  # Remove updates from HML ID script
+  mutate(last_digits = str_sub(batchid, start = -3)) %>%
+  filter(last_digits != 999) %>%
+  # Get latest update date
+  filter(batchid == max(batchid))
+
+latest_data_date <- as.Date(batch_data$timestamp[1], format = "%m/%d/%Y") %>%
+  format("%b %d, %Y")
 
 ```
 
