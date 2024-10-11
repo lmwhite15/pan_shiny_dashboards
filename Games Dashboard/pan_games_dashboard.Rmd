@@ -109,6 +109,10 @@ overall_time <- overall_attempted %>%
   pivot_longer(cols = everything()) %>%
   arrange(desc(value))
 
+overall_attempted_download <- overall_attempted %>%
+  select(hml_id, area, ends_with("game_status")) %>%
+  mutate(across(ends_with("game_status"), ~ifelse(is.na(.), "Not Attempted", .)))
+
 ```
 
 ```{r functions for plots and tables}
@@ -259,6 +263,19 @@ table_function <- function(picked_area = "All", game = "All", picked_id = "All")
 
 ```{r function for downloaded data and download handler}
 
+# Overall data completion download
+
+output$downloadOverallData <- downloadHandler(
+  filename = function(){
+    paste0("data_completion_", format(Sys.Date(), "%y%m%d"), ".csv")
+  },
+  content = function(file){
+    write.csv(overall_attempted_download, file, row.names = FALSE)
+  }
+)
+
+# Participant data download
+
 download_data_function <- function(picked_id){
   
   redcap_data_participant <- lapply(redcap_data, function(x){
@@ -267,10 +284,6 @@ download_data_function <- function(picked_id){
   })
   
 }
-
-
-redcap_data_participant <- lapply(redcap_data, function(x){
-    new_x <- filter(x, hml_id == "HML0104")})
 
 output$downloadDataTucson <- downloadHandler(
   filename = function(){
@@ -341,6 +354,13 @@ radioButtons("gamePick", label = "Select a game to view more detailed informatio
             selected = "all")
 
 game <- reactive({input$gamePick})
+
+```
+
+```{r download overall game summary}
+
+renderUI({downloadButton("downloadOverallData", "Download Overall Completion Data",
+                         style="white-space: normal;")})
 
 ```
 
