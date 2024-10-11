@@ -69,25 +69,17 @@ participant_data <- redcap_participant_data %>%
   left_join(participant_id_dat, by = "hml_id") %>%
   left_join(participant_elig_dat, by = "hml_id") %>%
   mutate(
-    study_start_date_before = case_when(
-      # Participant recruited before HML ID app created (choosing whichever date comes first)
-      hml_id_created_date < hml_start_date & hml_id_created_date < main_consent_date ~ as.Date(hml_id_created_date)-date_buffer,
-      hml_id_created_date < hml_start_date & hml_id_created_date >= main_consent_date ~ as.Date(main_consent_date)-date_buffer,
-      # Participant recruited after app was created
-      TRUE ~ as.Date(hml_id_created_date)-date_buffer),
-    study_start_date_after = case_when(
-      # Participant recruited before HML ID app created (choosing whichever date comes first)
-      hml_id_created_date < hml_start_date & hml_id_created_date < main_consent_date ~ as.Date(hml_id_created_date)+date_buffer,
-      hml_id_created_date < hml_start_date & hml_id_created_date >= main_consent_date ~ as.Date(main_consent_date)-+date_buffer,
-      # Participant recruited after app was created
-      TRUE ~ as.Date(hml_id_created_date)+date_buffer)
-  ) %>%
-  mutate(study_start_date_before = ifelse(is.na(study_start_date_before), 
-                                   as.character(as.Date(format(Sys.Date(), "%Y-%m-%d"))-date_buffer), 
-                                   as.character(study_start_date_before)),
-         study_start_date_after = ifelse(is.na(study_start_date_after), 
-                                          as.character(as.Date(format(Sys.Date(), "%Y-%m-%d"))-date_buffer), 
-                                          as.character(study_start_date_after))) %>%
+    hml_id_created_date = as.Date(hml_id_created_date),
+    main_consent_date = as.Date(main_consent_date),
+    study_start_date_before = case_when(!is.na(main_consent_date) ~ main_consent_date - date_buffer,
+                                        TRUE ~ hml_id_created_date - date_buffer
+                                        ),
+    study_start_date_after = case_when(!is.na(main_consent_date) ~ main_consent_date + date_buffer,
+                                       TRUE ~ hml_id_created_date + date_buffer)) %>%
+  mutate(study_start_date_before = case_when(is.na(study_start_date_before) ~ as.character(as.Date(format(Sys.Date(), "%Y-%m-%d"))-date_buffer), 
+                                             TRUE ~ as.character(study_start_date_before)),
+         study_start_date_after = case_when(is.na(study_start_date_after) ~ as.character(as.Date(format(Sys.Date(), "%Y-%m-%d"))-date_buffer), 
+                                         TRUE ~ as.character(study_start_date_after))) %>%
   select(-c(hml_id_created_date, main_consent_date))
 
 ## Load responses data
