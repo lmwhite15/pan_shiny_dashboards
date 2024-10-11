@@ -137,11 +137,11 @@ files_list <- lapply(raw_files_list, function(x){
 ## Word Pairs
 
 response_files_list[["word_pairs"]] <- files_list[["word_pairs"]] %>%
-  select(hml_id, participant_id, game_result) %>%
+  select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["word_pairs"]] %>% filter(!is.na(game_result)), by = "game_result",
             relationship = "many-to-many") %>%
   mutate(question_number = NA) %>% # because "question_number" not found in word pairs data
-  select(hml_id, participant_id, game_result, created_date_game_response = created_date_game_result,
+  select(hml_id, participant_id_parent, game_result, created_date_game_response = created_date_game_result,
          WP_round = round,
          WP_trial_type = difficulty,
          WP_trial = question_number, 
@@ -159,10 +159,10 @@ response_files_list[["word_pairs"]] <- files_list[["word_pairs"]] %>%
 ## Keep Track
 
 response_files_list[["keep_track"]] <- files_list[["keep_track"]] %>%
-  select(hml_id, participant_id, game_result) %>%
+  select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["keep_track"]], by = "game_result",
             relationship = "many-to-many") %>%
-  select(hml_id, participant_id, game_result, created_date_game_response,
+  select(hml_id, participant_id_parent, game_result, created_date_game_response,
          KT_round = round,
          KT_trial = question_number,
          KT_correct_resp = right_answer,
@@ -173,10 +173,10 @@ response_files_list[["keep_track"]] <- files_list[["keep_track"]] %>%
 ## Shapes
 
 response_files_list[["shapes"]] <- files_list[["shapes"]] %>%
-  select(hml_id, participant_id, game_result) %>%
+  select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["shapes"]], by = "game_result",
             relationship = "many-to-many") %>%
-  select(hml_id, participant_id, game_result, created_date_game_response,
+  select(hml_id, participant_id_parent, game_result, created_date_game_response,
          S_round = round,
          S_trial = question_number,
          S_condition = difficulty,
@@ -198,10 +198,10 @@ response_files_list[["shapes"]] <- files_list[["shapes"]] %>%
 ## Face Names
 
 response_files_list[["faces_names"]] <- files_list[["faces_names"]] %>%
-  select(hml_id, participant_id, game_result) %>%
+  select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["faces_names"]], by = "game_result",
             relationship = "many-to-many") %>%
-  select(hml_id, participant_id, game_result, created_date_game_response,
+  select(hml_id, participant_id_parent, game_result, created_date_game_response,
          FN_round = round,
          FN_trial = question_number,
          FN_trial_type = question_type,
@@ -219,10 +219,10 @@ response_files_list[["faces_names"]] <- files_list[["faces_names"]] %>%
 ## Focus
 
 response_files_list[["focus"]] <- files_list[["focus"]] %>%
-  select(hml_id, participant_id, game_result) %>%
+  select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["focus"]], by = "game_result",
             relationship = "many-to-many") %>%
-  select(hml_id, participant_id, game_result, created_date_game_response,
+  select(hml_id, participant_id_parent, game_result, created_date_game_response,
          F_round = round,
          F_trial_type = congruent,
          F_trial = question_number,
@@ -238,10 +238,10 @@ response_files_list[["focus"]] <- files_list[["focus"]] %>%
 ## Switching
 
 response_files_list[["switching"]] <- files_list[["switching"]] %>%
-  select(hml_id, participant_id, game_result) %>%
+  select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["switching"]], by = "game_result",
             relationship = "many-to-many") %>%
-  select(hml_id, participant_id, game_result, created_date_game_response,
+  select(hml_id, participant_id_parent, game_result, created_date_game_response,
          SW_round = round,
          SW_trial_type = round_descriptive,
          SW_trial = question_number,
@@ -255,10 +255,10 @@ response_files_list[["switching"]] <- files_list[["switching"]] %>%
 ## React
 
 response_files_list[["react"]] <- files_list[["react"]] %>%
-  select(hml_id, participant_id, game_result) %>%
+  select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["react"]], by = "game_result",
             relationship = "many-to-many") %>%
-  select(hml_id, participant_id, game_result, created_date_game_response,
+  select(hml_id, participant_id_parent, game_result, created_date_game_response,
          R_round = round,
          R_trial_type = trial_type,
          R_trial = question_number,
