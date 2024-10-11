@@ -68,17 +68,26 @@ date_buffer <- 90
 participant_data <- redcap_participant_data %>%
   left_join(participant_id_dat, by = "hml_id") %>%
   left_join(participant_elig_dat, by = "hml_id") %>%
-  mutate(study_start_date = case_when(
-    # Participant recruited before HML ID app created (choosing whichever date comes first)
-    hml_id_created_date < hml_start_date & hml_id_created_date < main_consent_date ~ as.Date(hml_id_created_date)-date_buffer,
-    hml_id_created_date < hml_start_date & hml_id_created_date >= main_consent_date ~ as.Date(main_consent_date)-date_buffer,
-    # Participant recruited after app was created
-    TRUE ~ as.Date(hml_id_created_date)-date_buffer)
+  mutate(
+    study_start_date_before = case_when(
+      # Participant recruited before HML ID app created (choosing whichever date comes first)
+      hml_id_created_date < hml_start_date & hml_id_created_date < main_consent_date ~ as.Date(hml_id_created_date)-date_buffer,
+      hml_id_created_date < hml_start_date & hml_id_created_date >= main_consent_date ~ as.Date(main_consent_date)-date_buffer,
+      # Participant recruited after app was created
+      TRUE ~ as.Date(hml_id_created_date)-date_buffer),
+    study_start_date_after = case_when(
+      # Participant recruited before HML ID app created (choosing whichever date comes first)
+      hml_id_created_date < hml_start_date & hml_id_created_date < main_consent_date ~ as.Date(hml_id_created_date)+date_buffer,
+      hml_id_created_date < hml_start_date & hml_id_created_date >= main_consent_date ~ as.Date(main_consent_date)-+date_buffer,
+      # Participant recruited after app was created
+      TRUE ~ as.Date(hml_id_created_date)+date_buffer)
   ) %>%
-  #######################
-  mutate(study_start_date = ifelse(is.na(study_start_date), 
+  mutate(study_start_date_before = ifelse(is.na(study_start_date_before), 
                                    as.character(as.Date(format(Sys.Date(), "%Y-%m-%d"))-date_buffer), 
-                                   as.character(study_start_date))) %>%
+                                   as.character(study_start_date_before)),
+         study_start_date_after = ifelse(is.na(study_start_date_after), 
+                                          as.character(as.Date(format(Sys.Date(), "%Y-%m-%d"))-date_buffer), 
+                                          as.character(study_start_date_after))) %>%
   select(-c(hml_id_created_date, main_consent_date))
 
 ## Load responses data
@@ -113,7 +122,8 @@ files_list <- lapply(raw_files_list, function(x){
     left_join(recent_x, by = "participant_id") %>%
     select(hml_id, area, everything()) %>%
     filter(!is.na(created_date_game_result)) %>%
-    filter(created_date_game_result >= study_start_date) %>%
+    # filter(created_date_game_result >= study_start_date_before) %>%
+    filter(created_date_game_result >= study_start_date_before & created_date_game_result <= study_start_date_after) %>%
     mutate(across(-c(created_date_game_result, record_id), ~ifelse(is.na(.), "", .))) %>%
     mutate(created_date_game_result = as.Date(created_date_game_result))
   
@@ -285,7 +295,7 @@ batch_data <- dbReadTable(con, "batch_id") %>%
 latest_data_date <- as.Date(batch_data$timestamp[1], format = "%m/%d/%Y") %>%
   format("%b %d, %Y")
 
-participant_dates <- participant_data %>% select(hml_id, record_id, area, study_start_date) %>% distinct()
+participant_dates <- participant_data %>% select(hml_id, record_id, area, study_start_date_before, study_start_date_after) %>% distinct()
 
 save(latest_data_date, games_update_date, names, files_list, redcap_data, participant_dates, file = paste0("pan_games_files_list.Rdata"))
 
