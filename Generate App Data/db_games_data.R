@@ -287,7 +287,7 @@ batch_data <- dbReadTable(con, "batch_id") %>%
 latest_data_date <- as.Date(batch_data$timestamp[1], format = "%m/%d/%Y") %>%
   format("%b %d, %Y")
 
-participant_dates <- participant_data %>% select(hml_id, record_id, area, study_start_date_before, study_start_date_after) %>% distinct()
+participant_dates <- participant_data %>% select(hml_id, record_id, participant_id_parent, area, study_start_date_before, study_start_date_after) %>% distinct()
 
 save(latest_data_date, games_update_date, names, files_list, redcap_data, participant_dates, file = paste0("pan_games_files_list.Rdata"))
 
