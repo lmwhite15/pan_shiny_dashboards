@@ -68,7 +68,7 @@ load(file = "pan_games_files_list.Rdata")
 ```{r overall game calculations}
 
 overall_attempted <- participant_dates %>%
-  select(hml_id, area)
+  select(hml_id, participant_id_parent, area)
 
 for(i in 1:length(files_list)){
   
@@ -84,7 +84,7 @@ for(i in 1:length(files_list)){
 
 overall_attempted_table <- overall_attempted %>%
   rbind(overall_attempted %>% mutate(area = "All")) %>%
-  select(-hml_id) %>%
+  select(-c(hml_id, participant_id_parent)) %>%
   select(-contains("timestamp")) %>%
   mutate(area = str_to_title(area)) %>%
   mutate(across(-area, ~ifelse(is.na(.) | . == "Not-Compeleted", 1, 0))) %>%
@@ -110,7 +110,7 @@ overall_time <- overall_attempted %>%
   arrange(desc(value))
 
 overall_attempted_download <- overall_attempted %>%
-  select(hml_id, area, ends_with("game_status")) %>%
+  select(hml_id, participant_id_parent, area, ends_with("game_status")) %>%
   mutate(across(ends_with("game_status"), ~ifelse(is.na(.), "Not Attempted", .)))
 
 ```
@@ -225,7 +225,7 @@ table_function <- function(picked_area = "All", game = "All", picked_id = "All")
       }else{ # Look at list of completed games for a participant
         overall_attempted %>%
           filter(hml_id == picked_id) %>%
-          select(-c(hml_id, area)) %>%
+          select(-c(hml_id, participant_id_parent, area)) %>%
           rename_all(~str_remove(., "_game")) %>%
           pivot_longer(cols =  everything(),
                        names_to = c("game", ".value"),
@@ -245,7 +245,7 @@ table_function <- function(picked_area = "All", game = "All", picked_id = "All")
       # Look at specific answers for a participant
       files_list[[game]] %>%
         filter(hml_id == picked_id) %>%
-        select(-c(hml_id, area, game_result, game_name, browser_useragent,
+        select(-c(hml_id, participant_id, study_start_date_before, study_start_date_after, area, game_result, game_name, browser_useragent,
                   user_agent, latitude, longitude, ip_address, language, tz_offset,
                   zip_code, user_device)) %>%
         mutate_all(as.character) %>%
@@ -279,7 +279,9 @@ output$downloadOverallData <- downloadHandler(
 download_data_function <- function(picked_id){
   
   redcap_data_participant <- lapply(redcap_data, function(x){
-    new_x <- filter(x, hml_id == picked_id)
+    new_x <- x %>%
+      filter(hml_id == picked_id) %>% 
+      mutate(across(everything(), as.character))
     new_x
   })
   
