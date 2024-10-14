@@ -154,7 +154,8 @@ response_files_list[["word_pairs"]] <- files_list[["word_pairs"]] %>%
   mutate(WP_trial_type = case_when(WP_trial_type == "easy" ~ 1,
                                    WP_trial_type == "hard" ~ 2),
          WP_correct = case_when(WP_correct == "True" ~ 1,
-                                WP_correct == "False" ~ 2))
+                                WP_correct == "False" ~ 2)) %>%
+  mutate(across(everything(), as.character))
 
 ## Keep Track
 
@@ -168,7 +169,8 @@ response_files_list[["keep_track"]] <- files_list[["keep_track"]] %>%
          KT_correct_resp = right_answer,
          KT_response = response,
          KT_correct = is_correct,
-         KT_rt = rt)
+         KT_rt = rt) %>%
+  mutate(across(everything(), as.character))
 
 ## Shapes
 
@@ -193,7 +195,8 @@ response_files_list[["shapes"]] <- files_list[["shapes"]] %>%
          S_image_left = str_remove(str_sub(S_image_left, end = -2), "\\{\"leftImage\":\""),
          S_image_right = str_remove(str_sub(S_image_right, end = -3), "\"rightImage\":\""),
          S_correct_resp = case_when(S_correct_resp == "f" ~ "match",
-                                    S_correct_resp == "j" ~ "non-match"))
+                                    S_correct_resp == "j" ~ "non-match")) %>%
+  mutate(across(everything(), as.character))
 
 ## Face Names
 
@@ -214,7 +217,8 @@ response_files_list[["faces_names"]] <- files_list[["faces_names"]] %>%
   mutate(FN_trial_type = case_when(FN_trial_type == "name" ~ 0,
                                    FN_trial_type == "occupation" ~ 1),
          FN_correct = case_when(FN_correct == "True" ~ 1,
-                                FN_correct == "False" ~ 2))
+                                FN_correct == "False" ~ 2)) %>%
+  mutate(across(everything(), as.character))
 
 ## Focus
 
@@ -233,7 +237,8 @@ response_files_list[["focus"]] <- files_list[["focus"]] %>%
   mutate(F_trial_type = case_when(F_trial_type == "True" ~ 1,
                                   F_trial_type == "False" ~ 2),
          F_correct = case_when(F_correct == "True" ~ 1,
-                               F_correct == "False" ~ 2))
+                               F_correct == "False" ~ 2)) %>%
+  mutate(across(everything(), as.character))
 
 ## Switching
 
@@ -250,7 +255,8 @@ response_files_list[["switching"]] <- files_list[["switching"]] %>%
          SW_correct = is_correct,
          SW_rt = rt) %>%
   mutate(SW_correct = case_when(SW_correct == "True" ~ 1,
-                                SW_correct == "False" ~ 2))
+                                SW_correct == "False" ~ 2)) %>%
+  mutate(across(everything(), as.character))
 
 ## React
 
@@ -269,7 +275,8 @@ response_files_list[["react"]] <- files_list[["react"]] %>%
   mutate(R_trial_type = case_when(R_trial_type == "simple" ~ 0,
                                   R_trial_type == "complex" ~ 1),
          R_correct = case_when(R_correct == "True" ~ 1,
-                               R_correct == "False" ~ 2))
+                               R_correct == "False" ~ 2)) %>%
+  mutate(across(everything(), as.character))
 
 # Save data ----------
 
