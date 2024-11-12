@@ -71,16 +71,11 @@ participant_data <- redcap_participant_data %>%
   mutate(
     hml_id_created_date = as.Date(hml_id_created_date),
     main_consent_date = as.Date(main_consent_date),
-    study_start_date_before = case_when(!is.na(main_consent_date) ~ main_consent_date - date_buffer,
-                                        TRUE ~ hml_id_created_date - date_buffer
-                                        ),
-    study_start_date_after = case_when(!is.na(main_consent_date) ~ main_consent_date + date_buffer,
-                                       TRUE ~ hml_id_created_date + date_buffer)) %>%
-  mutate(study_start_date_before = case_when(is.na(study_start_date_before) ~ as.character(as.Date(format(Sys.Date(), "%Y-%m-%d"))-date_buffer), 
-                                             TRUE ~ as.character(study_start_date_before)),
-         study_start_date_after = case_when(is.na(study_start_date_after) ~ as.character(as.Date(format(Sys.Date(), "%Y-%m-%d"))-date_buffer), 
-                                         TRUE ~ as.character(study_start_date_after))) %>%
-  select(-c(hml_id_created_date, main_consent_date))
+    filter_date = as.Date(ifelse(hml_id_created_date < hml_start_date, main_consent_date, hml_id_created_date)),
+    filter_date = as.Date(ifelse(is.na(filter_date), hml_id_created_date, filter_date)),
+    study_start_date_before = hml_id_created_date - date_buffer,
+    study_start_date_after = hml_id_created_date + date_buffer) %>%
+  select(-c(hml_id_created_date, main_consent_date, filter_date))
 
 ## Load responses data
 
