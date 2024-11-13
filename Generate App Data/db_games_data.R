@@ -61,7 +61,7 @@ participant_elig_dat <- dbReadTable(con, "p2_redcap_consent_form") %>%
   select(hml_id, main_consent_date)
 
 ## HML ID app created date
-hml_start_date <- as.Date("2023-10-01")
+hml_app_start_date <- as.Date("2023-10-01")
 
 date_buffer <- 90
 
@@ -69,12 +69,21 @@ participant_data <- redcap_participant_data %>%
   left_join(participant_id_dat, by = "hml_id") %>%
   left_join(participant_elig_dat, by = "hml_id") %>%
   mutate(
+    # A date was saved in an incorrect format:
+    hml_id_created_date = ifelse(hml_id_created_date == "9/5/24", "2024-09-05", hml_id_created_date),
     hml_id_created_date = as.Date(hml_id_created_date),
     main_consent_date = as.Date(main_consent_date),
-    filter_date = as.Date(ifelse(hml_id_created_date < hml_start_date, main_consent_date, hml_id_created_date)),
+    filter_date = as.Date(case_when(
+      # Use consent date if participant was consented before app was created
+      hml_id_created_date < hml_app_start_date ~ main_consent_date,
+      # Use HML ID if pre-app participant is missing consent date
+      is.na(main_consent_date) ~ hml_id_created_date,
+      # Use HML ID created date generally
+      TRUE ~ hml_id_created_date)),
+    # Some participants were missed in the previous filter
     filter_date = as.Date(ifelse(is.na(filter_date), hml_id_created_date, filter_date)),
-    study_start_date_before = hml_id_created_date - date_buffer,
-    study_start_date_after = hml_id_created_date + date_buffer) %>%
+    study_start_date_before = as.Date(hml_id_created_date - date_buffer),
+    study_start_date_after = as.Date(hml_id_created_date + date_buffer)) %>%
   select(-c(hml_id_created_date, main_consent_date, filter_date))
 
 ## Load responses data
@@ -109,9 +118,9 @@ files_list <- lapply(raw_files_list, function(x){
     left_join(recent_x, by = "participant_id") %>%
     select(hml_id, area, everything()) %>%
     filter(!is.na(created_date_game_result)) %>%
-    # filter(created_date_game_result >= study_start_date_before) %>%
-    filter(created_date_game_result >= study_start_date_before & created_date_game_result <= study_start_date_after) %>%
-    mutate(across(-c(created_date_game_result, record_id), ~ifelse(is.na(.), "", .))) %>%
+    mutate(game_status = ifelse(created_date_game_result >= study_start_date_before & created_date_game_result <= study_start_date_after,
+                                game_status, "Date Out of Range")) %>%
+    mutate(across(-c(contains("date"), record_id), ~ifelse(is.na(.), "", .))) %>%
     mutate(created_date_game_result = as.Date(created_date_game_result))
   
   game_name <- new_x$game_name[which(!is.na(new_x$game_name))][1] %>% 
@@ -132,6 +141,7 @@ files_list <- lapply(raw_files_list, function(x){
 ## Word Pairs
 
 response_files_list[["word_pairs"]] <- files_list[["word_pairs"]] %>%
+  filter(word_pairs_game_status != "Date Out of Range") %>%
   select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["word_pairs"]] %>% filter(!is.na(game_result)), by = "game_result",
             relationship = "many-to-many") %>%
@@ -155,6 +165,7 @@ response_files_list[["word_pairs"]] <- files_list[["word_pairs"]] %>%
 ## Keep Track
 
 response_files_list[["keep_track"]] <- files_list[["keep_track"]] %>%
+  filter(keep_track_game_status != "Date Out of Range") %>%
   select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["keep_track"]], by = "game_result",
             relationship = "many-to-many") %>%
@@ -170,6 +181,7 @@ response_files_list[["keep_track"]] <- files_list[["keep_track"]] %>%
 ## Shapes
 
 response_files_list[["shapes"]] <- files_list[["shapes"]] %>%
+  filter(shapes_game_status != "Date Out of Range") %>%
   select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["shapes"]], by = "game_result",
             relationship = "many-to-many") %>%
@@ -196,6 +208,7 @@ response_files_list[["shapes"]] <- files_list[["shapes"]] %>%
 ## Face Names
 
 response_files_list[["faces_names"]] <- files_list[["faces_names"]] %>%
+  filter(faces_names_game_status != "Date Out of Range") %>%
   select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["faces_names"]], by = "game_result",
             relationship = "many-to-many") %>%
@@ -218,6 +231,7 @@ response_files_list[["faces_names"]] <- files_list[["faces_names"]] %>%
 ## Focus
 
 response_files_list[["focus"]] <- files_list[["focus"]] %>%
+  filter(focus_game_status != "Date Out of Range") %>%
   select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["focus"]], by = "game_result",
             relationship = "many-to-many") %>%
@@ -238,6 +252,7 @@ response_files_list[["focus"]] <- files_list[["focus"]] %>%
 ## Switching
 
 response_files_list[["switching"]] <- files_list[["switching"]] %>%
+  filter(switching_game_status != "Date Out of Range") %>%
   select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["switching"]], by = "game_result",
             relationship = "many-to-many") %>%
@@ -256,6 +271,7 @@ response_files_list[["switching"]] <- files_list[["switching"]] %>%
 ## React
 
 response_files_list[["react"]] <- files_list[["react"]] %>%
+  filter(react_game_status != "Date Out of Range") %>%
   select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["react"]], by = "game_result",
             relationship = "many-to-many") %>%
