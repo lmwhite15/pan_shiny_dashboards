@@ -4,20 +4,20 @@ Top folder contains code to pull data from a local Box Health folder and then sa
 
 All of the dashboards contain custom.css and PAN_logo3.png files to make the apps look nice.
 
-- blah
+- 
 
 ## Pre-Screening
 
-- blah blah
+- 
 
 ## Survey
 
-- blah blah
+- 
 
 ## Games
 
-- blah blah
+- 
 
 ## HMl ID Assignment
 
-- blah blah
+- 
