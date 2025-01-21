@@ -54,9 +54,10 @@ if(production){
                    user = Sys.getenv("user")
                    , password = Sys.getenv("password")
                    , dbname = Sys.getenv("dbname")
-                   , host = Sys.getenv("host")
+                   #, host = Sys.getenv("host")
+                   # Test database:
+                   , host = "bio5-pan-test-primary.c0xzlo6s7duc.us-west-2.rds.amazonaws.com",
                    , port = Sys.getenv("port")
-                   # , sslmode = 'verify-full'
                    , sslrootcert = 'global-bundle.pem'
   )
 }
@@ -84,7 +85,10 @@ survey_names <- c("adl", "anxiety", "brain_disease", "covid", "diet", "fhad",
            "social_stressor", "social_support", "subjective_english", "swls")
 
 raw_files_list <- lapply(survey_names, 
-                         function(x){dbReadTable(con, paste0("p1_surveys_", x)) %>% 
+                         function(x){
+                           # Get all surveys only for people with HML IDs
+                           dbGetQuery(con, paste0("SELECT * FROM p1_surveys_", x, 
+                                                  " WHERE hml_id IS NOT NULL")) %>% 
                              mutate_all(~ifelse(. == "", NA, .))
                          })
 names(raw_files_list) <- survey_names
@@ -107,8 +111,6 @@ latest_data_date <- as.Date(batch_data$timestamp[1], format = "%m/%d/%Y") %>%
 raw_files_list_edit <- lapply(raw_files_list, function(x){
 
   new_x <- x  %>%
-    # Filter only participants
-    filter(!is.na(hml_id)) %>%
     # Replace NAs with blanks for REDCap import file
     mutate(across(-c(created_date_survey), ~ifelse(!is.na(created_date_survey) & is.na(.), "", .))) %>%
     # Set variable as date format
@@ -276,7 +278,7 @@ table_function <- function(picked_site = "All", survey = "All", picked_id = "All
                        levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
         arrange(site) %>%
         mutate(counts = paste0(number_missing, " (", round(percent_missing, 1), "%)"),
-               site = paste0(str_to_title(site), " \n (n = ", total_surveys, ")")) %>%
+               site = paste0(str_to_title(site), " (n = ", total_surveys, ")")) %>%
         pivot_wider(id_cols = survey,
                     names_from = site,
                     values_from = counts) %>%

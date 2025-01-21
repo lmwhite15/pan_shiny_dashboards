@@ -11,8 +11,6 @@ survey_logic_branching <- function(files_list){
   
   # Covid --------
   
-  ## Note for future: remove for loop (assign values by vectors all at once)
-  
   for(i in 1:nrow(files_list[["covid"]])){
     # If participant completed survey
     if(!is.na(files_list[["covid"]]$created_date_survey[i])){
