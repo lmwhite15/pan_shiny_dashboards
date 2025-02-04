@@ -87,9 +87,21 @@ survey_names <- c("adl", "anxiety", "brain_disease", "covid", "diet", "fhad",
 raw_files_list <- lapply(survey_names, 
                          function(x){
                            # Get all surveys only for people with HML IDs
-                           dbGetQuery(con, paste0("SELECT * FROM p1_surveys_", x, 
-                                                  " WHERE hml_id IS NOT NULL")) %>% 
+                           new_x <- dbGetQuery(con, paste0("SELECT * FROM p1_surveys_", x, 
+                                                  " WHERE hml_id IS NOT NULL 
+                                                  or participant_id = '0035e000016Nk2dAAC'")) %>% 
                              mutate_all(~ifelse(. == "", NA, .))
+                           
+                           # 04-Feb-2025: Participant was registered under two different emails, one linked 
+                           # to 0035e000016Nk2dAAC which completed the surveys and the other, 
+                           # 0035e000016NmGkAAK, was used to register HML ID. Added participant_id for 
+                           # incorrectly stored survey 
+                           new_x$hml_id[which(new_x$participant_id == "0035e000016Nk2dAAC")] <- "HML0617"
+                           new_x$record_id[which(new_x$participant_id == "0035e000016Nk2dAAC")] <- "601"
+                           new_x$site[which(new_x$participant_id == "0035e000016Nk2dAAC")] <- "Miami"
+                           new_x$p2_participant[which(new_x$participant_id == "0035e000016Nk2dAAC")] <- "True"
+                           
+                           new_x
                          })
 names(raw_files_list) <- survey_names
 
@@ -291,9 +303,9 @@ table_function <- function(picked_site = "All", survey = "All", picked_id = "All
         kable_styling(full_width = F)
     }else{ # Look at a specific survey for all sites
       files_list[[survey]] %>%
-        select(-c(hml_id, record_id, ends_with("_timestamp"))) %>%
+        select(-c(hml_id, record_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
         rbind(files_list[[survey]] %>%
-                select(-c(hml_id, record_id, ends_with("_timestamp"))) %>%
+                select(-c(hml_id, record_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
                 mutate(site = "All")) %>%
         group_by(site) %>%
         mutate(across(everything(), ~ifelse(is.na(.) | . == "", 1, 0)),
@@ -368,7 +380,7 @@ table_function <- function(picked_site = "All", survey = "All", picked_id = "All
       if(picked_id == "All"){ # Look at completed items for specific survey
         files_list[[survey]] %>%
           filter(site == picked_site) %>%
-          select(-c(hml_id, record_id, site, ends_with("_timestamp"))) %>%
+          select(-c(hml_id, record_id, site, ends_with("_timestamp"), ends_with("_completed"))) %>%
           mutate(across(everything(), ~ifelse(is.na(.) | . == "", 1, 0)),
                  nrow = n()) %>%
           pivot_longer(cols = -nrow) %>%

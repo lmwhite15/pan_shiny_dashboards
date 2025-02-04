@@ -17,7 +17,7 @@ survey_logic_branching <- function(files_list){
       # If answered yes to testing positive for Covid
       if(files_list[["covid"]]$C19_v1.0.1[i] == "No"){
         files_list[["covid"]]$C19_v1.0.2[i] <- "Not missing"
-        files_list[["covid"]]$C19_v1.0.3[i] <- "Not missing"
+        files_list[["covid"]]$C19_v1.0.3[i] <- "Not missing"   
         files_list[["covid"]]$C19_v1.0.4[i] <- "Not missing"
         files_list[["covid"]]$C19_v1.0.5[i] <- "Not missing"
         files_list[["covid"]]$C19_v1.0.6[i] <- "Not missing"
@@ -274,6 +274,7 @@ survey_logic_branching <- function(files_list){
         files_list[["health_medical"]]$HM_v1.0.56[i] <- "Not missing"
         files_list[["health_medical"]]$HM_v1.0.57[i] <- "Not missing"
         files_list[["health_medical"]]$HM_v1.0.58[i] <- "Not missing"
+        files_list[["health_medical"]]$HM_v1.0.59[i] <- "Not missing"
       }
     }
   }
