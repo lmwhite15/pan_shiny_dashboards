@@ -54,9 +54,8 @@ if(production){
                    user = Sys.getenv("user")
                    , password = Sys.getenv("password")
                    , dbname = Sys.getenv("dbname")
-                   #, host = Sys.getenv("host")
-                   # Test database:
-                   , host = "bio5-pan-test-primary.c0xzlo6s7duc.us-west-2.rds.amazonaws.com",
+                   , host = Sys.getenv("host")
+                   # , host = "bio5-pan-test-primary.c0xzlo6s7duc.us-west-2.rds.amazonaws.com", # test database
                    , port = Sys.getenv("port")
                    , sslrootcert = 'global-bundle.pem'
   )

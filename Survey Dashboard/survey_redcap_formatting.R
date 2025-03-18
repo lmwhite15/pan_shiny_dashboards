@@ -423,6 +423,7 @@ redcap_formatting <- function(redcap_files_list){
   # Social Stressors ------
   
   redcap_files_list[["social_stressor"]] <- redcap_files_list[["social_stressor"]] %>%
+    # Create additional yes variable which specifies level of stress
     mutate(socstress_v101_yes = ifelse(socstress_v101 != "No", socstress_v101, NA),
            socstress_v102_yes = ifelse(socstress_v102 != "No", socstress_v102, NA),
            socstress_v103_yes = ifelse(socstress_v103 != "No", socstress_v103, NA),
@@ -435,7 +436,8 @@ redcap_formatting <- function(redcap_files_list){
            socstress_v1010_yes = ifelse(socstress_v1010 != "No", socstress_v1010, NA),
            socstress_v1011_yes = ifelse(socstress_v1011 != "No", socstress_v1011, NA),
            socstress_v1012_yes = ifelse(socstress_v1012 != "No", socstress_v1012, NA),
-           across(socstress_v101:socstress_v1012, ~ifelse(. != "No", "Yes", .))) %>%
+           # Change original variable to just yes/no instead of stress level selection
+           across(socstress_v101:socstress_v1012, ~ifelse(. %in% c("Yes", "Mildly Stressful", "Stressful", "Very Stressful"), "Yes", .))) %>%
     mutate(across(starts_with("socstress_v"), 
                   ~case_when(. == "No" ~ 0,
                              . == "Yes" ~ 1,
