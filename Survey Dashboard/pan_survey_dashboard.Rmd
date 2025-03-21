@@ -88,7 +88,12 @@ raw_files_list <- lapply(survey_names,
                            # Get all surveys only for people with HML IDs
                            new_x <- dbGetQuery(con, paste0("SELECT * FROM p1_surveys_", x, 
                                                   " WHERE hml_id IS NOT NULL 
-                                                  or participant_id = '0035e000016Nk2dAAC'")) %>% 
+                                                  or participant_id IN 
+                                                  (
+                                                  '0035e000016Nk2dAAC',
+                                                  '003Vu00000hTICAIA4', 
+                                                  '003Vu00000lDflWIAS'
+                                                  )")) %>% 
                              mutate_all(~ifelse(. == "", NA, .))
                            
                            # 04-Feb-2025: Participant was registered under two different emails, one linked 
@@ -99,6 +104,18 @@ raw_files_list <- lapply(survey_names,
                            new_x$record_id[which(new_x$participant_id == "0035e000016Nk2dAAC")] <- "601"
                            new_x$site[which(new_x$participant_id == "0035e000016Nk2dAAC")] <- "Miami"
                            new_x$p2_participant[which(new_x$participant_id == "0035e000016Nk2dAAC")] <- "True"
+                           
+                           # 21-Mar-2025: Participants logged into MC under different emails than what
+                           # was used to assign HML IDs.
+                           new_x$hml_id[which(new_x$participant_id == "003Vu00000hTICAIA4")] <- "HML0765"
+                           new_x$record_id[which(new_x$participant_id == "003Vu00000hTICAIA4")] <- "751"
+                           new_x$site[which(new_x$participant_id == "003Vu00000hTICAIA4")] <- "Tucson"
+                           new_x$p2_participant[which(new_x$participant_id == "003Vu00000hTICAIA4")] <- "True"
+                           
+                           new_x$hml_id[which(new_x$participant_id == "003Vu00000lDflWIAS")] <- "HML0793"
+                           new_x$record_id[which(new_x$participant_id == "003Vu00000lDflWIAS")] <- "777"
+                           new_x$site[which(new_x$participant_id == "003Vu00000lDflWIAS")] <- "Tucson"
+                           new_x$p2_participant[which(new_x$participant_id == "003Vu00000lDflWIAS")] <- "True"
                            
                            new_x
                          })
@@ -247,7 +264,7 @@ plot_function <- function(survey = "All"){
                  color = site, group = site)) +
       geom_point() +
       geom_line() +
-      labs(x = "Survey", y = "% Missing", color = "site") +
+      labs(x = "Survey", y = "% Missing", color = "Site") +
       theme(legend.position = "top",
             axis.text.x = element_text(angle = 90,
                                        hjust = 0.9,

@@ -169,7 +169,7 @@ table_function <- function(picked_area = "All", game = "All", picked_id = "All")
                        levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
         arrange(area) %>%
         mutate(counts = paste0(number_missing, " (", round(percent_missing, 1), "%)"),
-               area = paste0(str_to_title(area), " \n (n = ", total_games, ")")) %>%
+               area = paste0(str_to_title(area), " (n = ", total_games, ")")) %>%
         pivot_wider(id_cols = game,
                     names_from = area,
                     values_from = counts) %>%
