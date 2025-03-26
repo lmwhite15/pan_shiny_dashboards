@@ -80,8 +80,8 @@ hml_ids <- dbReadTable(con, "info_from_redcap") %>%
 
 # Get surveys --------------
 survey_names <- c("adl", "anxiety", "brain_disease", "covid", "diet", "fhad", 
-           "health_medical", "perceived_stress", "qpar", "ses", "sleep",
-           "social_stressor", "social_support", "subjective_english", "swls")
+           "health_medical", "qpar", "ses", "sleep", "social_stressor", 
+           "social_support",  "perceived_stress", "subjective_english", "swls")
 
 raw_files_list <- lapply(survey_names, 
                          function(x){
@@ -122,7 +122,7 @@ raw_files_list <- lapply(survey_names,
 names(raw_files_list) <- survey_names
 
 # Temporarily ignore the four new columns in QPAR
-raw_files_list[["qpar"]] <- raw_files_list[["qpar"]] %>% 
+raw_files_list[["qpar"]] <- raw_files_list[["qpar"]] %>%
                                  select(-c(QPAR_v1.0.17, QPAR_v1.0.18, QPAR_v1.0.19, QPAR_v1.0.20))
 
 # Get update date --------
@@ -250,7 +250,6 @@ for(i in 2:length(files_list)){
                              by = c("hml_id", "site"))%>%
     filter(!is.na(site) & site != "")
 }
-
 
 ```
 
