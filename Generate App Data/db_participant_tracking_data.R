@@ -38,7 +38,7 @@ con <- dbConnect(RPostgres::Postgres(),
 
 demo <- dbReadTable(con, "p2_redcap_demographics") %>%
   select(record_id, hml_id, hml_id_created_date, api_import_date,
-         age, decade, sex, race, hispanic_latino, group_id_number, memory_rank)  %>%
+         age, decade, sex, race, hispanic_latino, site, memory_rank)  %>%
   # Create variables for app table/plots
   mutate(age_group = case_when(age %in% 50:59 ~ "50-59",
                                age %in% 60:69 ~ "60-69",
@@ -159,7 +159,7 @@ screening_data$area = stringr::str_to_title(screening_data$area)
 
 assess <- base %>%
   # Add in demo data
-  full_join(select(demo, record_id, group_id_number, hml_id,
+  full_join(select(demo, record_id, site, hml_id,
                    age_group, race_group, memory_rank, sex), by = c("record_id", "hml_id")) %>%
   # Filter for consented participants
   left_join(cons, by = c("record_id", "hml_id")) %>%
@@ -167,10 +167,7 @@ assess <- base %>%
   # Get postgres update date
   mutate(update_date = format(Sys.Date(), "%y%m%d")) %>%
   # Create area variable
-  mutate(area = case_when(group_id_number == 4669 ~ "Atlanta",
-                          group_id_number == 4668 ~ "Baltimore",
-                          group_id_number == 4667 ~ "Miami",
-                          group_id_number == 4670 ~ "Tucson")) %>%
+  mutate(area = site) %>%
   # Cognitive Summaries ~~~~~~~~~~~~~~
   mutate(across(phq9_endorse_q9:avlt_trial_a7_zscore, ~ifelse(is.na(.), 1, 0))) %>%
   mutate("PHQ-9" = ifelse((phq9_endorse_q9 + phq9_total + phq9_complete) > 0, "Missing", "Non-Missing"),
@@ -220,10 +217,7 @@ all_mindcrowd_data <- mindcrowd_data %>%
 # All HML ID assigned participants
 hml_data <- demo %>%
   rename(paired_associates = memory_rank) %>%
-  mutate(area = case_when(group_id_number == 4669 ~ "Atlanta",
-                          group_id_number == 4668 ~ "Baltimore",
-                          group_id_number == 4667 ~ "Miami",
-                          group_id_number == 4670 ~ "Tucson"),
+  mutate(area = site,
          day_time = ifelse(is.na(hml_id_created_date), api_import_date, hml_id_created_date),
          day_time = as.Date(day_time, format = "%Y-%m-%d"),
          month_time = as.character(format(day_time, "%Y-%m")),
