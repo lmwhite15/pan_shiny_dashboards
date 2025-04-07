@@ -97,7 +97,7 @@ overall_attempted_table <- overall_attempted %>%
   select(-c(hml_id, participant_id_parent)) %>%
   select(-contains("timestamp")) %>%
   mutate(site = str_to_title(site)) %>%
-  mutate(across(-site, ~ifelse(is.na(.) | . == "Not-Compeleted", 1, 0))) %>%
+  mutate(across(-site, ~ifelse(is.na(.) | . == "Not-Completed", 1, 0))) %>%
   group_by(site) %>% mutate(nrow = n()) %>%
   pivot_longer(cols = -c(site, nrow),
                names_to = "game",
