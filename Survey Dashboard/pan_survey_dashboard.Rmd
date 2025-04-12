@@ -121,10 +121,6 @@ raw_files_list <- lapply(survey_names,
                          })
 names(raw_files_list) <- survey_names
 
-# Temporarily ignore the four new columns in QPAR
-raw_files_list[["qpar"]] <- raw_files_list[["qpar"]] %>%
-                                 select(-c(QPAR_v1.0.17, QPAR_v1.0.18, QPAR_v1.0.19, QPAR_v1.0.20))
-
 # Get update date --------
 batch_data <- dbReadTable(con, "batch_id") %>%
   # Get latest update date
