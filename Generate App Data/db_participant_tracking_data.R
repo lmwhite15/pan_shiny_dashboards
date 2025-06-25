@@ -37,7 +37,7 @@ con <- dbConnect(RPostgres::Postgres(),
                  sslrootcert = 'global-bundle.pem')
 
 demo <- dbReadTable(con, "p2_redcap_demographics") %>%
-  select(record_id, hml_id, hml_id_created_date, api_import_date,
+  select(record_id, hml_id, hml_id_created_date, created_date_participant,
          age, decade, sex, race, hispanic_latino, site, memory_rank)  %>%
   # Create variables for app table/plots
   mutate(age_group = case_when(age %in% 50:59 ~ "50-59",
@@ -218,7 +218,7 @@ all_mindcrowd_data <- mindcrowd_data %>%
 hml_data <- demo %>%
   rename(paired_associates = memory_rank) %>%
   mutate(area = site,
-         day_time = ifelse(is.na(hml_id_created_date), api_import_date, hml_id_created_date),
+         day_time = ifelse(is.na(hml_id_created_date), created_date_participant, hml_id_created_date),
          day_time = as.Date(day_time, format = "%Y-%m-%d"),
          month_time = as.character(format(day_time, "%Y-%m")),
          month_name_time = format(day_time, "%Y %b"),
