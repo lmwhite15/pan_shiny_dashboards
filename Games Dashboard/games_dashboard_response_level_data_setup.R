@@ -4,8 +4,7 @@
 ## Word Pairs
 
 response_files_list[["word_pairs"]] <- files_list[["word_pairs"]] %>%
-  filter(hml_id == picked_id) %>%
-  filter(word_pairs_game_status != "Date Out of Range") %>%
+  filter(hml_id == picked_id, visit == visit_number) %>%
   select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["word_pairs"]] %>% filter(!is.na(game_result)), by = "game_result",
             relationship = "many-to-many") %>%
@@ -29,8 +28,7 @@ response_files_list[["word_pairs"]] <- files_list[["word_pairs"]] %>%
 ## Keep Track
 
 response_files_list[["keep_track"]] <- files_list[["keep_track"]] %>%
-  filter(hml_id == picked_id) %>%
-  filter(keep_track_game_status != "Date Out of Range") %>%
+  filter(hml_id == picked_id, visit == visit_number) %>%
   select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["keep_track"]], by = "game_result",
             relationship = "many-to-many") %>%
@@ -46,8 +44,7 @@ response_files_list[["keep_track"]] <- files_list[["keep_track"]] %>%
 ## Shapes
 
 response_files_list[["shapes"]] <- files_list[["shapes"]] %>%
-  filter(hml_id == picked_id) %>%
-  filter(shapes_game_status != "Date Out of Range") %>%
+  filter(hml_id == picked_id, visit == visit_number) %>%
   select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["shapes"]], by = "game_result",
             relationship = "many-to-many") %>%
@@ -74,8 +71,7 @@ response_files_list[["shapes"]] <- files_list[["shapes"]] %>%
 ## Face Names
 
 response_files_list[["faces_names"]] <- files_list[["faces_names"]] %>%
-  filter(hml_id == picked_id) %>%
-  filter(faces_names_game_status != "Date Out of Range") %>%
+  filter(hml_id == picked_id, visit == visit_number) %>%
   select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["faces_names"]], by = "game_result",
             relationship = "many-to-many") %>%
@@ -98,8 +94,7 @@ response_files_list[["faces_names"]] <- files_list[["faces_names"]] %>%
 ## Focus
 
 response_files_list[["focus"]] <- files_list[["focus"]] %>%
-  filter(hml_id == picked_id) %>%
-  filter(focus_game_status != "Date Out of Range") %>%
+  filter(hml_id == picked_id, visit == visit_number) %>%
   select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["focus"]], by = "game_result",
             relationship = "many-to-many") %>%
@@ -120,8 +115,7 @@ response_files_list[["focus"]] <- files_list[["focus"]] %>%
 ## Switching
 
 response_files_list[["switching"]] <- files_list[["switching"]] %>%
-  filter(hml_id == picked_id) %>%
-  filter(switching_game_status != "Date Out of Range") %>%
+  filter(hml_id == picked_id, visit == visit_number) %>%
   select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["switching"]], by = "game_result",
             relationship = "many-to-many") %>%
@@ -140,8 +134,7 @@ response_files_list[["switching"]] <- files_list[["switching"]] %>%
 ## React
 
 response_files_list[["react"]] <- files_list[["react"]] %>%
-  filter(hml_id == picked_id) %>%
-  filter(react_game_status != "Date Out of Range") %>%
+  filter(hml_id == picked_id, visit == visit_number) %>%
   select(hml_id, participant_id_parent, game_result) %>%
   left_join(response_files_list[["react"]], by = "game_result",
             relationship = "many-to-many") %>%

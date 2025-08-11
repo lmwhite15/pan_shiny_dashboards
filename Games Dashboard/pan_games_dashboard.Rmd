@@ -41,7 +41,8 @@ library(openxlsx) # Generates xlsx file for download
 
 source("games_dashboard_summary_functions.R", local = TRUE)
 
-# Connect to PAN Database
+# Connect to PAN Database ----------------------------
+
 ## RStudio Connect has a different database connection
 if(production){
   con <- dbConnect(RPostgres::Postgres(),
@@ -65,41 +66,179 @@ if(production){
 options(knitr.kable.NA = '')
 
 theme_set(theme_bw())
+
+# Get data update date --------------
+
+# Get date data were updated (to display in sidebar)
+batch_data <- dbReadTable(con, "batch_id") %>%
+  # Get latest update date
+  mutate(new_timestamp = as.Date(timestamp, format = "%m/%d/%Y")) %>%
+  filter(new_timestamp == max(new_timestamp))
+
+latest_data_date <- as.Date(batch_data$timestamp[1], format = "%m/%d/%Y") %>%
+  format("%b %d, %Y")
+
 ```
 
 ```{r load games data}
-# This script loads the main games data (not response level data, that will be loaded once a participant is selected)
-# local = TRUE means script uses the libraries and variables from this Rmd
-source("games_dashboard_data_setup.R", local = TRUE)
+
+# Get participant data --------------------
+
+# HML ID created dates, ids, and recruitment site
+info_hml_id_data <- dbReadTable(con, "info_hml_id_data") %>%
+  select(hml_id, hml_id_created_date, participant_id_parent = participant_id, site = area)
+
+## Get secondary participant_ids
+participant_id_dat <- dbReadTable(con, "views_all_ids") %>%
+  select(hml_id, participant_id = participant_ids) %>%
+  separate_rows(participant_id)
+
+# Get eligibility date
+participant_elig_dat <- dbReadTable(con, "p2_redcap_consent_form") %>%
+  select(hml_id, main_consent_date)
+
+# Date buffer for filtering games +/- days around participant HML ID generation date
+date_buffer <- 90
+
+# HML ID app created date
+hml_app_start_date <- as.Date("2023-10-01")
+
+# Combine id data and generate filtering dates for games
+participant_data <- info_hml_id_data %>%
+  left_join(participant_id_dat, by = "hml_id") %>%
+  left_join(participant_elig_dat, by = "hml_id") %>%
+  mutate(
+    # A date was saved in an incorrect format:
+    hml_id_created_date = ifelse(hml_id_created_date == "9/5/24", "2024-09-05", hml_id_created_date),
+    hml_id_created_date = as.Date(hml_id_created_date),
+    main_consent_date = as.Date(main_consent_date),
+    filter_date = as.Date(case_when(
+      # Use consent date if participant was consented before app was created
+      hml_id_created_date < hml_app_start_date ~ main_consent_date,
+      # Use HML ID if pre-app participant is missing consent date
+      is.na(main_consent_date) ~ hml_id_created_date,
+      # Use HML ID created date generally
+      TRUE ~ hml_id_created_date)),
+    # Some participants were missed in the previous filter
+    filter_date = as.Date(ifelse(is.na(filter_date), hml_id_created_date, filter_date)),
+    first_date_before = as.Date(filter_date - date_buffer),
+    first_date_after = as.Date(filter_date + date_buffer),
+    # Add second visit range
+    second_date_before = as.Date(filter_date - date_buffer) + 365*2,
+    second_date_after = as.Date(filter_date + date_buffer) + 365*2,
+    # If not eligible for second visit yet, replace date with NA
+    second_date_before = ifelse(second_date_before < Sys.Date(), as.character(second_date_before), NA),
+    second_date_after = ifelse(!is.na(second_date_before), as.character(second_date_after), NA)) %>%
+  select(-c(hml_id_created_date, main_consent_date, filter_date)) %>%
+  # 2025-03-21: Participants logged into MC under different emails than what was used to assign HML IDs.
+  mutate(participant_id = case_when(hml_id == "HML0765" ~ "003Vu00000hTICAIA4",
+                                    hml_id == "HML0793" ~ "003Vu00000lDflWIAS",
+                                    TRUE ~ participant_id)) %>%
+  # Pivot longer so each visit gets a row
+  mutate(across(c(ends_with("date_before"), ends_with("date_after")), as.Date)) %>%
+  pivot_longer(cols = c(ends_with("date_before"), ends_with("date_after")),
+                        names_to = c("visit", "time"), names_pattern = "(.*)_date_(.*)") %>%
+  mutate(visit = case_when(visit == "first" ~ 1,
+                           visit == "second" ~ 2)) %>%
+  pivot_wider(id_cols = c(hml_id, participant_id_parent, participant_id, site, visit),
+              names_from = time, names_prefix = "range_", values_from = value) %>%
+  filter(!is.na(range_before))
+
+# Get main games data ----------------------
+
+# This chunk pulls and formats the main* games data 
+# *not the response-level data, that will be pulled when the users requests to download participant data
+
+# Load games data -----------------------
+
+names <- c("attention", "faces_names", "focus", "keep_track", "objects", "objects_spatial", 
+           "objects_temporal", "react", "shapes", "switching", "word_pairs")
+
+# Get main games data
+raw_files_list <- lapply(names, 
+                         function(x){
+                           # Get all games and only load rows with participant_ids matching participant_data$participant_id
+                           dbGetQuery(con, paste0("SELECT * FROM ", x, " WHERE participant_id IN ('", 
+                                                  paste0(participant_data$participant_id, collapse = "', '"), "')"))})
+names(raw_files_list) <- names
+
+# Format games data ----------------------
+
+# Match games to participant data within recruitment sites
+
+files_list <- lapply(raw_files_list, function(x){
+  if(sum(str_detect(names(x), "created_date_game_session") > 0)){
+    names(x)[which(names(x) == "created_date_game_session")] <- "created_date_game_result"
+  }
+  
+  new_x <- participant_data %>%
+    left_join(x, by = "participant_id", relationship = "many-to-many") %>%
+    select(hml_id, site, everything()) %>%
+    filter(!is.na(created_date_game_result)) %>%
+    # Assign game status based on first and second visit ranges
+    mutate(out_of_date_range = ifelse(created_date_game_result >= range_before & 
+                                  created_date_game_result <= range_after,
+                                "N", "Y")) %>%
+    mutate(across(-c(contains("date"), range_before, range_after), ~ifelse(is.na(.), "", .))) %>%
+    mutate(created_date_game_result = as.Date(created_date_game_result)) %>%
+    # Get most recent, completed game within game range, if none exist then get most recent game for visit
+    group_by(hml_id, visit) %>% 
+    mutate(time_since_range_end = abs(as.numeric(created_date_game_result - range_after))) %>%
+    arrange(out_of_date_range, visit, time_since_range_end, desc(created_date_game_result)) %>% 
+    slice(1) %>% ungroup()  %>%
+    # If a person has the same game for two visits, select only one game for visit closest to game date
+    group_by(hml_id, created_date_game_result) %>%
+    arrange(time_since_range_end, out_of_date_range) %>%
+    slice(1) %>% ungroup()
+  
+  # Add back in any missing visits so all participants have all possible available visits
+  new_x_full <- participant_data %>%
+    select(-participant_id) %>%
+    distinct() %>%
+    left_join(new_x,
+              by = join_by(hml_id, participant_id_parent, 
+                           site, visit, range_before, range_after)) %>%
+    mutate(game_status_calc = ifelse(out_of_date_range == "Y", "Out of Range", game_status))
+  
+  game_name <- new_x_full$game_name[which(!is.na(new_x_full$game_name))][1] %>% 
+    str_to_lower() %>% str_replace(" ", "\\_") %>% str_remove_all("[^[:alpha:]|\\_]")
+  
+  game_name <- case_when(game_name == "objects_space" ~ "objects_spatial",
+                         game_name == "objects_time" ~ "objects_temporal",
+                         TRUE ~ game_name)
+  
+  names(new_x_full)[which(names(new_x_full) == "game_status")] <- paste0(game_name, "_game_status")
+  names(new_x_full)[which(names(new_x_full) == "game_status_calc")] <- paste0(game_name, "_game_status_calc")
+  names(new_x_full)[which(names(new_x_full) == "out_of_date_range")] <- paste0(game_name, "_", "out_of_date_range")
+  names(new_x_full)[which(names(new_x_full) == "created_date_game_result")] <- paste0(game_name, "_", "timestamp")
+
+  new_x_full
+})
 
 ```
 
 ```{r overall game calculations}
 
-overall_attempted <- participant_data %>%
-  select(hml_id, participant_id_parent, site) %>%
-  distinct()
+# Create dataset with just game status and times by hml id and visit
+overall_attempted_list <- lapply(files_list, function(x){
+  new_x <- x %>%
+    select(hml_id, participant_id_parent, site, visit, 
+           ends_with("_game_status_calc"), ends_with("out_of_date_range"), 
+           ends_with("_game_status"), ends_with("_timestamp")) %>%
+    distinct()
+})
 
-for(i in 1:length(files_list)){
-  
-  game_data <- files_list[[i]] %>% 
-    select(hml_id, contains("game_status"), contains("timestamp")) %>%
-    group_by(hml_id) %>% arrange(.[3]) %>% slice(1) %>% ungroup()
-  
-  overall_attempted <- merge(overall_attempted,
-                             game_data,
-                             all = T,
-                             by = c("hml_id"))
-}
+overall_attempted <- overall_attempted_list %>%
+  reduce(full_join, by = c("hml_id", "visit", "participant_id_parent", "site")) %>%
+  arrange(hml_id)
 
 overall_attempted_table <- overall_attempted %>%
   rbind(overall_attempted %>% mutate(site = "All")) %>%
-  select(-c(hml_id, participant_id_parent)) %>%
-  select(-contains("timestamp")) %>%
+  select(site, visit, ends_with("game_status_calc")) %>%
   mutate(site = str_to_title(site)) %>%
-  mutate(across(-site, ~ifelse(is.na(.) | . == "Not-Completed", 1, 0))) %>%
-  group_by(site) %>% mutate(nrow = n()) %>%
-  pivot_longer(cols = -c(site, nrow),
+  mutate(across(-c(site, visit), ~ifelse(is.na(.) | . == "Not-Completed", 1, 0))) %>%
+  group_by(site, visit) %>% mutate(nrow = n()) %>%
+  pivot_longer(cols = -c(site, nrow, visit),
                names_to = "game",
                values_to = "missing") %>%
   group_by(game, .add = T) %>%
@@ -108,21 +247,172 @@ overall_attempted_table <- overall_attempted %>%
             total_games = nrow) %>%
   ungroup() %>%
   distinct() %>%
-  mutate(game = str_replace(game, "_game_status", ""),
+  mutate(game = str_replace(game, "_game_status_calc", ""),
          game = case_when(game == "faces_names" ~ "Faces & Names",
                           game == "objects_spatial" ~ "Objects & Spaces",
                           game == "objects_temporal" ~ "Objects & Time",
                           TRUE ~ str_to_title(str_replace(game, "_", " "))))
 
-overall_time <- overall_attempted %>%
-  select(contains("timestamp")) %>%
-  pivot_longer(cols = everything()) %>%
-  arrange(desc(value))
-
 overall_attempted_download <- overall_attempted %>%
-  select(hml_id, participant_id_parent, site, ends_with("game_status")) %>%
   mutate(across(ends_with("game_status"), ~ifelse(is.na(.), "Not Attempted", .)))
 
+```
+
+```{r data summary functions}
+
+plot_function <- function(game = "All", visit_number = 1){
+  if(game == "All"){
+    ggplot(overall_attempted_table %>% filter(visit == visit_number), 
+           aes(x = reorder(game, percent_missing), 
+               y = percent_missing, color = site)) +
+      geom_point(size = 2) +
+      geom_line(aes(group = site), linewidth = 1) +
+      labs(x = "Games", y = "% Missing", color = "Site") +
+      theme(legend.position = "top",
+            axis.text.x = element_text(angle = 90,
+                                       hjust = 0.9,
+                                       vjust = 0.1),
+            text = element_text(size = 18))
+  }else{ # Look at a specific game for all sites
+    if(game == "attention"){ # Look at Attention game
+      files_list[["attention"]] %>%
+        rbind(files_list[["attention"]] %>% mutate(site = "All")) %>%
+        filter(visit == visit_number,
+               attention_game_status == "Completed",
+               attnRT_median != "") %>%
+        mutate(site = str_to_title(site),
+               site = factor(site,
+                             levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
+        ggplot(aes(x = site, y = as.numeric(attnRT_median))) +
+        geom_boxplot(outlier.shape = NA, lwd = 1) +
+        geom_jitter(width = 0.25, height = 0, alpha = 0.5, color = "#224A7B", size = 2) +
+        labs(x = "Site", y = "Median Reaction Time") +
+        theme(legend.position = "none",
+              text = element_text(size = 18))
+    }else{ # Look at any other game
+      files_list[[game]] %>%
+        rbind(files_list[[game]] %>% mutate(site = "All")) %>%
+        filter(!!as.name(paste0(game, "_game_status")) == "Completed",
+               visit == visit_number) %>%
+        mutate(site = str_to_title(site),
+               site = factor(site,
+                             levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
+        ggplot(aes(x = site, y = totalcorrect)) +
+        geom_boxplot(outlier.shape = NA, lwd = 1) +
+        geom_jitter(width = 0.25, height = 0, alpha = 0.5, color = "#224A7B", size = 2) +
+        labs(x = "Site", y = "Total Correct Answers Across Non-Practice Rounds") +
+        theme(legend.position = "none",
+              text = element_text(size = 18))
+    }
+  }
+}
+
+table_function <- function(picked_site = "All", game = "All", picked_id = "All", visit_number = 1){
+  if(picked_site == "All"){
+    if(game == "All"){ # Look at all games for all sites
+      overall_attempted_table %>%
+        filter(visit == visit_number) %>%
+        mutate(site = factor(site,
+                             levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
+        arrange(site) %>%
+        mutate(counts = paste0(number_missing, " (", round(percent_missing, 1), "%)"),
+               site = paste0(str_to_title(site), " (n = ", total_games, ")")) %>%
+        pivot_wider(id_cols = game,
+                    names_from = site,
+                    values_from = counts) %>%
+        rename(Game = game) %>%
+        kable(caption = "% Missing") %>%
+        kable_styling(full_width = F)
+    }else{ # Look at a specific game for all sites
+      if(game == "attention"){
+        files_list[["attention"]] %>%
+          rbind(files_list[["attention"]] %>% mutate(site = "All")) %>%
+          filter(visit == visit_number,
+                 attention_game_status == "Completed",
+                 attnRT_median != "") %>%
+          mutate(site = str_to_title(site),
+                 site = factor(site,
+                               levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All")),
+                 attnRT_median = as.numeric(attnRT_median)) %>%
+          select(site, attnRT_median) %>%
+          group_by(site) %>%
+          summarise(mean_sd = paste0(round(mean(attnRT_median, na.rm = T), 1), " (", 
+                                     round(sd(attnRT_median, na.rm = T), 1), ")")) %>%
+          pivot_wider(names_from = site, values_from = mean_sd) %>%
+          data.frame() %>%
+          `row.names<-`("Mean of Median Reaction Times (SD)") %>%
+          kable(row.names = T) %>%
+          kable_styling(full_width = F)
+      }else{
+        files_list[[game]] %>%
+          rbind(files_list[[game]] %>% mutate(site = "All")) %>%
+          filter(!!as.name(paste0(game, "_game_status")) == "Completed",
+                 visit == visit_number) %>%
+          mutate(site = str_to_title(site),
+                 site = factor(site,
+                               levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
+          select(site, totalcorrect) %>%
+          group_by(site) %>%
+          summarise(mean_sd = paste0(round(mean(totalcorrect, na.rm = T), 1), " (", 
+                                     round(sd(totalcorrect, na.rm = T), 1), ")")) %>%
+          pivot_wider(names_from = site, values_from = mean_sd) %>%
+          data.frame() %>%
+          `row.names<-`("Mean Total Correct (SD)") %>%
+          kable() %>%
+          kable_styling(full_width = F)
+      }
+    }
+  }else{ # Looking at specific site
+    if(game == "All"){
+      if(picked_id == "All"){ # Look at list of completed games for specific site
+        overall_attempted_table %>%
+          filter(site == picked_site,
+                 visit == visit_number) %>%
+          mutate(Missing = paste0(number_missing, " (", round(percent_missing, 1), "%)")) %>%
+          select(Game = game, Missing) %>%
+          kable() %>%
+          kable_styling(full_width = F)
+      }else{ # Look at list of completed games for a participant
+        overall_attempted %>%
+          filter(hml_id == picked_id,
+                 visit == visit_number) %>%
+          select(-c(hml_id, participant_id_parent, site, visit, ends_with("_calc"))) %>%
+          rename_all(~str_remove(., "_game")) %>%
+          rename_all(~str_replace(., "out_of_date_range", "outofrange")) %>%
+          pivot_longer(cols =  everything(),
+                       names_to = c("game", ".value"),
+                       names_pattern = "(.*)_(.*)") %>%
+          mutate(game = str_replace(game, "_game_status", ""),
+                 game = case_when(game == "faces_names" ~ "Faces & Names",
+                                  game == "objects_spatial" ~ "Objects & Spaces",
+                                  game == "objects_temporal" ~ "Objects & Time",
+                                  TRUE ~ str_to_title(str_replace(game, "_", " "))),
+                 timestamp = as.character(timestamp),
+                 timestamp = ifelse(is.na(timestamp), "Not Attempted", timestamp)) %>%
+          select(Game = game, `Date Attempted` = timestamp, Status = status, 
+                 `Date Out of Range?` = outofrange) %>%
+          kable(col.names = c("Game", "Date Attempted", "Status", "Date Out Of Range?"), 
+                align = c("lccc")) %>%
+          kable_styling(full_width = F)
+      }
+    }else{
+      # Look at specific answers for a participant
+      files_list[[game]] %>%
+        filter(hml_id == picked_id, visit == visit_number) %>%
+        select(-c(hml_id, participant_id, range_before, range_after, site, 
+                  game_result, game_name, browser_useragent,
+                  user_agent, latitude, longitude, ip_address, language, tz_offset,
+                  zip_code, user_device, time_since_range_end, ends_with("status_calc"))) %>%
+        mutate_all(as.character) %>%
+        pivot_longer(cols = everything(),
+                     names_to = "Variable",
+                     values_to = "record") %>%
+        mutate(record = ifelse(is.na(record), "Missing", record)) %>%
+        kable(col.names = c("Variable", "Participant Record")) %>%
+        kable_styling(full_width = F)
+    }
+  }
+}
 ```
 
 ```{r function for downloaded data and download handler}
@@ -142,14 +432,15 @@ output$downloadOverallData <- downloadHandler(
 # Participant response level data download -------------
 
 # Produces participant's response level data for download
-download_data_function <- function(picked_id){
+download_data_function <- function(picked_id, visit_number){
   # Loading bar
   withProgress(message = "Loading response data", {
     
     # Get game IDs for participant
     participant_game_ids <- lapply(files_list, 
                                      function(x){
-                                       filter(x, hml_id == picked_id) %>% select(game_result)
+                                       filter(x, hml_id == picked_id, visit == visit_number) %>% 
+                                         select(game_result)
                                      }) %>%
       unlist() %>% paste(collapse = "', '")
     
@@ -170,37 +461,37 @@ download_data_function <- function(picked_id){
 
 output$downloadDataTucson <- downloadHandler(
   filename = function(){
-    paste0("data_", picked_id_tucson(), "_", format(Sys.Date(), "%y%m%d"), ".xlsx")
+    paste0("data_", picked_id_tucson(), "_", visitPick(), "_",  format(Sys.Date(), "%y%m%d"), ".xlsx")
   },
   content = function(file){
-    write.xlsx(download_data_function(picked_id_tucson()), file)
+    write.xlsx(download_data_function(picked_id_tucson(), visitPick()), file)
   }
 )
 
 output$downloadDataAtlanta <- downloadHandler(
   filename = function(){
-    paste0("data_", picked_id_atlanta(), "_", format(Sys.Date(), "%y%m%d"), ".xlsx")
+    paste0("data_", picked_id_atlanta(), "_", visitPick(), "_",  format(Sys.Date(), "%y%m%d"), ".xlsx")
   },
   content = function(file){
-    write.xlsx(download_data_function(picked_id_atlanta()), file)
+    write.xlsx(download_data_function(picked_id_atlanta(), visitPick()), file)
   }
 )
 
 output$downloadDataBaltimore <- downloadHandler(
   filename = function(){
-    paste0("data_", picked_id_baltimore(), "_", format(Sys.Date(), "%y%m%d"), ".xlsx")
+    paste0("data_", picked_id_baltimore(), "_", visitPick(), "_",  format(Sys.Date(), "%y%m%d"), ".xlsx")
   },
   content = function(file){
-    write.xlsx(download_data_function(picked_id_baltimore()), file)
+    write.xlsx(download_data_function(picked_id_baltimore(), visitPick()), file)
   }
 )
 
 output$downloadDataMiami <- downloadHandler(
   filename = function(){
-    paste0("data_", picked_id_miami(), "_", format(Sys.Date(), "%y%m%d"), ".xlsx")
+    paste0("data_", picked_id_miami(), "_", visitPick(), "_", format(Sys.Date(), "%y%m%d"), ".xlsx")
   },
   content = function(file){
-    write.xlsx(download_data_function(picked_id_miami()), file)
+    write.xlsx(download_data_function(picked_id_miami(), visitPick()), file)
   }
 )
 
@@ -216,6 +507,12 @@ output$downloadDataMiami <- downloadHandler(
 #### Latest Data: `r latest_data_date`
 
 ```{r select game input}
+
+radioButtons("visitPick", label = "Select a visit.",
+             choices = list("Baseline" = 1, "2YR Follow Up" = 2),
+             selected = 1)
+
+visitPick <- reactive({input$visitPick})
 
 radioButtons("gamePick", label = "Select a game to view more detailed information.",
             choices = list(
@@ -257,9 +554,9 @@ Row
 
 renderPlot({
   if(game() == "all"){
-    plot_function()
+    plot_function(visit = visitPick())
   }else{
-    plot_function(game = game())
+    plot_function(game = game(), visit = visitPick())
   }
 })
 
@@ -272,9 +569,9 @@ renderPlot({
 shiny::renderUI(
   HTML(
     if(game() == "all"){
-      table_function()
+      table_function(visit = visitPick())
     }else{
-      table_function(game = game())
+      table_function(game = game(), visit = visitPick())
     }
   )
 )
@@ -308,15 +605,15 @@ shiny::renderUI(
   HTML(
     if(game() == "all"){
       if(picked_id_tucson() == "All"){
-        table_function(picked_site = "Tucson")
+        table_function(visit = visitPick(), picked_site = "Tucson")
       }else{
-        table_function(picked_site = "Tucson", picked_id = picked_id_tucson())
+        table_function(visit = visitPick(), picked_site = "Tucson", picked_id = picked_id_tucson())
       }
     }else{
       if(picked_id_tucson() == "All"){
-        table_function(picked_site = "Tucson", game = game())
+        table_function(visit = visitPick(), picked_site = "Tucson", game = game())
       }else{
-        table_function(picked_site = "Tucson", game = game(), picked_id = picked_id_tucson())
+        table_function(visit = visitPick(), picked_site = "Tucson", game = game(), picked_id = picked_id_tucson())
       }
     }
   )
@@ -352,15 +649,15 @@ shiny::renderUI(
   HTML(
     if(game() == "all"){
       if(picked_id_atlanta() == "All"){
-        table_function(picked_site = "Atlanta")
+        table_function(visit = visitPick(), picked_site = "Atlanta")
       }else{
-        table_function(picked_site = "Atlanta", picked_id = picked_id_atlanta())
+        table_function(visit = visitPick(), picked_site = "Atlanta", picked_id = picked_id_atlanta())
       }
     }else{
       if(picked_id_atlanta() == "All"){
-        table_function(picked_site = "Atlanta", game = game())
+        table_function(visit = visitPick(), picked_site = "Atlanta", game = game())
       }else{
-        table_function(picked_site = "Atlanta", game = game(), picked_id = picked_id_atlanta())
+        table_function(visit = visitPick(), picked_site = "Atlanta", game = game(), picked_id = picked_id_atlanta())
       }
     }
   )
@@ -394,15 +691,15 @@ shiny::renderUI(
   HTML(
     if(game() == "all"){
       if(picked_id_baltimore() == "All"){
-        table_function(picked_site = "Baltimore")
+        table_function(visit = visitPick(), picked_site = "Baltimore")
       }else{
-        table_function(picked_site = "Baltimore", picked_id = picked_id_baltimore())
+        table_function(visit = visitPick(), picked_site = "Baltimore", picked_id = picked_id_baltimore())
       }
     }else{
       if(picked_id_baltimore() == "All"){
-        table_function(picked_site = "Baltimore", game = game())
+        table_function(visit = visitPick(), picked_site = "Baltimore", game = game())
       }else{
-        table_function(picked_site = "Baltimore", game = game(), picked_id = picked_id_baltimore())
+        table_function(visit = visitPick(), picked_site = "Baltimore", game = game(), picked_id = picked_id_baltimore())
       }
     }
   )
@@ -438,15 +735,15 @@ shiny::renderUI(
   HTML(
     if(game() == "all"){
       if(picked_id_miami() == "All"){
-        table_function(picked_site = "Miami")
+        table_function(visit = visitPick(), picked_site = "Miami")
       }else{
-        table_function(picked_site = "Miami", picked_id = picked_id_miami())
+        table_function(visit = visitPick(), picked_site = "Miami", picked_id = picked_id_miami())
       }
     }else{
       if(picked_id_miami() == "All"){
-        table_function(picked_site = "Miami", game = game())
+        table_function(visit = visitPick(), picked_site = "Miami", game = game())
       }else{
-        table_function(picked_site = "Miami", game = game(), picked_id = picked_id_miami())
+        table_function(visit = visitPick(), picked_site = "Miami", game = game(), picked_id = picked_id_miami())
       }
     }
   )
