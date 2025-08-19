@@ -18,8 +18,8 @@ resource_files:
 ```{=html}
 <style type="text/css">
 
-  .chart-title {  /* chart_title  */
-    font-size: 22px;
+.chart-title {  /* chart_title  */
+font-size: 22px;
 
 </style>
 ```
@@ -27,7 +27,7 @@ resource_files:
 <!-- Server -->
 
 ```{r is_production, include = FALSE}
-production <- TRUE
+production <- FALSE
 ```
 
 ```{r setup, include=FALSE}
@@ -55,7 +55,6 @@ if(production){
                    , password = Sys.getenv("password")
                    , dbname = Sys.getenv("dbname")
                    , host = Sys.getenv("host")
-                   # , host = "bio5-pan-test-primary.c0xzlo6s7duc.us-west-2.rds.amazonaws.com", # test database
                    , port = Sys.getenv("port")
                    , sslrootcert = 'global-bundle.pem'
   )
@@ -78,16 +77,40 @@ hml_ids <- dbReadTable(con, "info_from_redcap") %>%
   select(hml_id, record_id, site) %>%
   arrange(hml_id)
 
+# Get first visit date date ----------
+# Using consent date as date for first visit, there are some more recent participants
+# whose data have not been entered yet, so we're using the hml id generated date
+# as an estimate to prevent any code hiccups later on.
+
+# Get hml id generated date if consent is missing:
+missing_consent_dat <- dbGetQuery(con, "SELECT hml_id, hml_id_created_date FROM info_hml_id_data")
+
+consent_dat <- dbGetQuery(con, "SELECT hml_id, main_consent_date FROM p2_redcap_consent_form") %>%
+  full_join(missing_consent_dat, by = "hml_id") %>%
+  mutate(first_visit_date = ifelse(is.na(main_consent_date), hml_id_created_date, main_consent_date),
+         # One of the dates is in the wrong format
+         first_visit_date = ifelse(first_visit_date == "9/5/24", "2024-09-05", first_visit_date),
+         # Check if eligible for second visit
+         first_visit = 1,
+         second_visit = ifelse(as.numeric(Sys.Date() - as.Date(first_visit_date)) >= 365*2, 2, NA)) %>%
+  pivot_longer(cols = c(first_visit, second_visit),
+               names_to = "name", values_to = "survey_visit_number") %>%
+  select(hml_id, first_visit_date, survey_visit_number) %>%
+  filter(!is.na(survey_visit_number))
+
+hml_ids <- hml_ids %>%
+  left_join(consent_dat, by = "hml_id")
+
 # Get surveys --------------
 survey_names <- c("adl", "anxiety", "brain_disease", "covid", "diet", "fhad", 
-           "health_medical", "qpar", "ses", "sleep", "social_stressor", 
-           "social_support",  "perceived_stress", "subjective_english", "swls")
+                  "health_medical", "qpar", "ses", "sleep", "social_stressor", 
+                  "social_support",  "perceived_stress", "subjective_english", "swls")
 
 raw_files_list <- lapply(survey_names, 
                          function(x){
                            # Get all surveys only for people with HML IDs
                            new_x <- dbGetQuery(con, paste0("SELECT * FROM p1_surveys_", x, 
-                                                  " WHERE hml_id IS NOT NULL 
+                                                           " WHERE hml_id IS NOT NULL 
                                                   or participant_id IN 
                                                   (
                                                   '0035e000016Nk2dAAC',
@@ -134,8 +157,11 @@ latest_data_date <- as.Date(batch_data$timestamp[1], format = "%m/%d/%Y") %>%
 
 ```{r format surveys}
 
-raw_files_list_edit <- lapply(raw_files_list, function(x){
+# Remove brain disease, covid, FHAD, SES, and subjective English from second visits.
+remove_from_second_visit <- c("BD", "C19", "FHAD", "SES", "SUBENG")
 
+raw_files_list_edit <- lapply(raw_files_list, function(x){
+  
   new_x <- x  %>%
     # Replace NAs with blanks for REDCap import file
     mutate(across(-c(created_date_survey), ~ifelse(!is.na(created_date_survey) & is.na(.), "", .))) %>%
@@ -147,7 +173,7 @@ raw_files_list_edit <- lapply(raw_files_list, function(x){
   if(sum(colnames(new_x) %in% c("Last Modified Date", "Not Listed", "Not.Listed", "Last.Modified.Date")) > 0){
     new_x <- new_x[-which(colnames(new_x) %in% c("Last Modified Date", "Not Listed", "Not.Listed", "Last.Modified.Date"))]
   }
-
+  
   
   new_x
 })
@@ -163,16 +189,25 @@ files_list <- lapply(raw_files_list_edit, function(x){
              rowSums(na.rm = T),
            completed = ifelse(!is.na(select(., created_date_survey)) & missing == 0, "Completed", "Not Completed")) %>%
     select(hml_id, completed, site, created_date_survey) %>%
-    filter(!is.na(site) & site != "") %>%
-    # Get most recent, completed survey if available, otherwise select most recent survey
-    slice_max(order_by = created_date_survey, by = c(hml_id, completed), with_ties = FALSE) %>%
-    # If an ID has 2 rows after the slice, then they have both complete and incomplete attempts,
-    # so, for those people, we only select the completed survey
-    group_by(hml_id) %>% mutate(n = n()) %>%
-    filter((n == 1) | (n == 2 & completed == "Completed")) %>%
-    select(-n)
+    filter(!is.na(site) & site != "") 
   
-  new_x <- complete_x %>%
+  recent_x <- complete_x %>%
+    left_join(consent_dat %>% filter(survey_visit_number == 1) %>% 
+                select(hml_id, first_visit_date), by = "hml_id") %>%
+    mutate(
+      # Round dates to month instead of using day
+      created_date_survey_round = paste0(str_sub(created_date_survey, end = -3), "01"),
+      first_visit_date = paste0(str_sub(first_visit_date, end = -3), "01"),
+      # Get time since first visit and assign any surveys past the second year as second visit surveys
+      time_since_first_visit = as.Date(created_date_survey_round) - as.Date(first_visit_date),
+      survey_visit_number = ifelse(as.numeric(time_since_first_visit) >= 365*2, 2, 1)
+    ) %>% 
+    # Get most recent, completed survey if available, otherwise select most recent survey
+    # This is calculated within ID and visit number
+    slice_max(order_by = created_date_survey, by = c(hml_id, survey_visit_number), with_ties = FALSE) %>%
+    select(-c(first_visit_date, created_date_survey_round, time_since_first_visit))
+  
+  new_x <- recent_x %>%
     left_join(x, by = join_by(hml_id, site, created_date_survey))
   
   # Get survey name
@@ -185,19 +220,29 @@ files_list <- lapply(raw_files_list_edit, function(x){
   # Rename complete variable
   colnames(new_x)[which(colnames(new_x) == "completed")] <- paste0(survey_name, "_", "completed")
   
+  # Rename visit number variable
+  #colnames(new_x)[which(colnames(new_x) == "survey_visit_number")] <- paste0(survey_name, "_", "survey_visit_number")
+  
   # Reorder variables
   item_list <- names(new_x)[which(str_detect(names(new_x), survey_name) 
+                                  #& !endsWith(names(new_x), "survey_visit_number")
                                   & !endsWith(names(new_x), "timestamp")
                                   & !endsWith(names(new_x), "completed"))]
   max_item_number <- max(as.numeric(str_extract(item_list, "(?<=\\.)\\d+$")))
   
   new_x <- hml_ids %>%
-    left_join(new_x, by = join_by(hml_id, record_id, site)) %>%
-    select(hml_id, site, contains("_completed"), record_id, contains("_timestamp"),
+    left_join(new_x, by = join_by(hml_id, record_id, site, survey_visit_number)) %>%
+    select(hml_id, site, contains("survey_visit_number"),
+           contains("_completed"), record_id, contains("_timestamp"),
            paste0(survey_name, "_v1.0.", 1:max_item_number)) %>%
     mutate(site = str_to_title(site)) %>%
     distinct() %>%
     arrange(hml_id)
+  
+  # Remove brain disease, covid, FHAD, health medical, SES, and subjective English from second visits.
+  if(survey_name %in% remove_from_second_visit){
+    new_x <- subset(new_x, survey_visit_number != 2)
+  }
   
   new_x
 })
@@ -208,52 +253,109 @@ files_list <- lapply(raw_files_list_edit, function(x){
 
 complete_files_list <- lapply(files_list, function(x){
   new_x <- x %>%
-    select(hml_id, site, contains("_completed"))
+    select(hml_id, site, contains("survey_visit_number"), contains("_completed"))
 })
 
 ```
 
 ```{r overall survey calculations}
 
-# Create "Overall Attempted" Table Data ---------
-overall_attempted <- reduce(complete_files_list, full_join, by = c("hml_id", "site")) %>%
-  mutate(across(-c(hml_id, site), ~ifelse(is.na(.), "Not Completed", .)))
+# Create "Overall Attempted" Table Data
+overall_attempted <- reduce(complete_files_list, full_join, by = c("hml_id", "site", "survey_visit_number")) %>%
+  mutate(across(-c(hml_id, site, contains("survey_visit_number")), ~ifelse(is.na(.), "Not Completed", .)))
 
-# Format "Overall Attempted" Table ----
+# Format "Overall Attempted" Table
 overall_attempted_table <- overall_attempted %>%
   rbind(overall_attempted %>% mutate(site = "All")) %>%
   select(-hml_id) %>%
   mutate(across(everything(), as.character),
-         across(-site, ~ifelse(. == "Not Completed", 1, 0))) %>%
-  group_by(site) %>% mutate(nrow = n()) %>%
-  pivot_longer(cols = -c(site, nrow),
+         across(-c(site, contains("survey_visit_number")), ~ifelse(. == "Not Completed", 1, 0))) %>%
+  group_by(site, survey_visit_number) %>% mutate(nrow = n()) %>%
+  pivot_longer(cols = -c(site, nrow, survey_visit_number),
                names_to = "survey",
                values_to = "missing") %>%
   group_by(survey, .add = T) %>%
   reframe(number_missing = sum(missing),
-            percent_missing = sum(missing)/nrow * 100,
-            total_surveys = nrow) %>%
+          percent_missing = sum(missing)/nrow * 100,
+          total_surveys = nrow) %>%
   distinct() %>%
   mutate(survey = str_replace(survey, "_.*", "")) %>%
-  ungroup()
+  ungroup() %>%
+  # Remove brain disease, covid, FHAD, health medical, SES, and subjective English from second visits.
+  filter(!(survey_visit_number == 2 & survey %in% remove_from_second_visit))
 
-overall_attempted_time <- files_list[[1]] %>% select(hml_id, site, contains("timestamp"))
+overall_attempted_time <- files_list[[1]] %>% 
+  select(hml_id, site, survey_visit_number, contains("timestamp"))
 
 for(i in 2:length(files_list)){
   overall_attempted_time <- merge(overall_attempted_time,
-                             files_list[[i]] %>% select(hml_id, site, contains("timestamp")),
-                             all = T,
-                             by = c("hml_id", "site"))%>%
+                                  files_list[[i]] %>% 
+                                    select(hml_id, site, survey_visit_number, contains("timestamp")),
+                                  all = T,
+                                  by = c("hml_id", "site", "survey_visit_number"))%>%
     filter(!is.na(site) & site != "")
 }
+
+# Create overall completed/attempted table for download
+overall_attempted_all_participants <- overall_attempted_time %>%
+  # filter(hml_id == picked_id, survey_visit_number == visit) %>%
+  pivot_longer(cols = -c(hml_id, site, survey_visit_number),
+               names_to = "Survey", values_to = "timestamp") %>%
+  filter(!(survey_visit_number == 2 & Survey %in% paste0(remove_from_second_visit, "_timestamp"))) %>%
+  # select(-c(hml_id, site, survey_visit_number)) %>%
+  mutate(
+    Survey = case_when(
+      Survey == "ANX_timestamp" ~ "Anxiety",
+      Survey == "BD_timestamp" ~ "Brain Disease",
+      Survey == "C19_timestamp" ~ "Covid-19",
+      Survey == "DIET_timestamp" ~ "Diet",
+      Survey == "HM_timestamp" ~ "Health Medical",
+      Survey == "SLEEP_timestamp" ~ "Sleep",
+      Survey == "SOCSTRESS_timestamp" ~ "Social Stressor",
+      Survey == "SOCSUPP_timestamp" ~ "Social Support",
+      Survey == "STRESS_timestamp" ~ "Perceived Stress",
+      Survey == "SUBENG_timestamp" ~ "Subjective English",
+      TRUE ~ str_remove(Survey, "_timestamp")
+    ),
+    timestamp = format(as.Date(timestamp), "%Y-%m-%d")
+  ) %>%
+  left_join(
+    overall_attempted %>%
+      select(-site) %>%
+      pivot_longer(cols = -c(hml_id, survey_visit_number), 
+                   names_to = "Survey", 
+                   values_to = "Completed") %>%
+      mutate(Survey = case_when(
+        Survey == "ANX_completed" ~ "Anxiety",
+        Survey == "BD_completed" ~ "Brain Disease",
+        Survey == "C19_completed" ~ "Covid-19",
+        Survey == "DIET_completed" ~ "Diet",
+        Survey == "HM_completed" ~ "Health Medical",
+        Survey == "SLEEP_completed" ~ "Sleep",
+        Survey == "SOCSTRESS_completed" ~ "Social Stressor",
+        Survey == "SOCSUPP_completed" ~ "Social Support",
+        Survey == "STRESS_completed" ~ "Perceived Stress",
+        Survey == "SUBENG_completed" ~ "Subjective English",
+        TRUE ~ str_remove(Survey, "_completed")
+      )),
+    by = c("hml_id", "Survey", "survey_visit_number")
+  ) %>%
+  rename(game_status = Completed) %>%
+  mutate(game_status = ifelse(is.na(timestamp), "Not Attempted", game_status)) %>%
+  pivot_wider(id_cols = c(hml_id, site, survey_visit_number),
+              names_from = Survey,
+              values_from = c(timestamp, game_status),
+              names_glue = "{Survey}_{.value}",
+              names_vary = "slowest")
 
 ```
 
 ```{r functions for plots and tables}
 
-plot_function <- function(survey = "All"){
+plot_function <- function(survey = "All", visit = 1){
   if(survey == "All"){
     overall_attempted_table %>%
+      filter(survey_visit_number == visit) %>%
       mutate(site = str_to_title(site)) %>%
       ggplot(aes(x = survey, y = percent_missing, 
                  color = site, group = site)) +
@@ -265,168 +367,171 @@ plot_function <- function(survey = "All"){
                                        hjust = 0.9,
                                        vjust = 0.1))
   }else{ # Look at a specific survey for all sites
-    files_list[[survey]] %>%
-      select(-c(hml_id, record_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
-      rbind(files_list[[survey]] %>%
-              select(-c(hml_id, record_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
-              mutate(site = "All")) %>%
-      group_by(site) %>%
-      mutate(across(everything(), ~ifelse(is.na(.) | . == "", 1, 0)),
-             nrow = n()) %>%
-      pivot_longer(cols = -c(nrow, site)) %>%
-      group_by(name, .add = T) %>%
-      reframe(sum = sum(value),
-                percent = sum(value)/nrow * 100,
-                total = nrow) %>%
-      distinct() %>% ungroup() %>%
-      mutate(site = str_to_title(site)) %>%
-      mutate(name = factor(name, 
-                           levels = paste0(
-                             str_match(.$name[1], ".*\\_"), "v1.0.", 
-                             seq(from = 1, to = nrow(.))))) %>%
-      ggplot(aes(x = name, y = percent, col = site, group = site)) +
-      geom_point() +
-      geom_line() +
-      labs(x = "Item", y = "% Missing", color = "Site") +
-      theme(legend.position = "top",
-            axis.text.x = element_text(angle = 90))
-  }
-}
-
-table_function <- function(picked_site = "All", survey = "All", picked_id = "All"){
-  if(picked_site == "All"){
-    if(survey == "All"){ # Look at all surveys for all sites
-      overall_attempted_table %>%
-        mutate(site = factor(site,
-                       levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
-        arrange(site) %>%
-        mutate(counts = paste0(number_missing, " (", round(percent_missing, 1), "%)"),
-               site = paste0(str_to_title(site), " (n = ", total_surveys, ")")) %>%
-        pivot_wider(id_cols = survey,
-                    names_from = site,
-                    values_from = counts) %>%
-        mutate(survey = str_replace(survey_names, "_", " "),
-               survey = str_to_title(survey),
-               survey = ifelse(survey %in% c("Adl", "Fhad", "Qpar", "Ses", "Swls"),
-                               toupper(survey), survey)) %>%
-        rename(Survey = survey) %>%
-        kable() %>%
-        kable_styling(full_width = F)
-    }else{ # Look at a specific survey for all sites
+    if(visit == 2 & survey %in% remove_from_second_visit){
+      print("Survey not required for second visit.")
+    }else{
       files_list[[survey]] %>%
+        filter(survey_visit_number == visit) %>%
         select(-c(hml_id, record_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
         rbind(files_list[[survey]] %>%
+                filter(survey_visit_number == visit) %>%
                 select(-c(hml_id, record_id, ends_with("_timestamp"), ends_with("_completed"))) %>%
                 mutate(site = "All")) %>%
         group_by(site) %>%
         mutate(across(everything(), ~ifelse(is.na(.) | . == "", 1, 0)),
                nrow = n()) %>%
-        pivot_longer(cols = -c(nrow, site)) %>%
+        pivot_longer(cols = -c(nrow, site, survey_visit_number)) %>%
         group_by(name, .add = T) %>%
         reframe(sum = sum(value),
-                  percent = sum(value)/nrow * 100,
-                  total = nrow) %>%
+                percent = sum(value)/nrow * 100,
+                total = nrow) %>%
         distinct() %>% ungroup() %>%
-        mutate(site = factor(site,
-                       levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
-        arrange(site) %>%
-        mutate(site = paste0(str_to_title(site), " (n = ", total, ")"),
-               name = factor(name, 
+        mutate(site = str_to_title(site)) %>%
+        mutate(name = factor(name, 
                              levels = paste0(
                                str_match(.$name[1], ".*\\_"), "v1.0.", 
-                               seq(from = 1, to = nrow(.)))),
-               counts = paste0(sum, " (", round(percent, 1), "%)")) %>%
-        pivot_wider(id_cols = name,
-                    names_from = site,
-                    values_from = counts) %>%
-        arrange(name) %>%
-        left_join(survey_data_dictionary %>% select(name = item, question),
-                  by = "name") %>%
-        select(name, question, everything()) %>%
-        rename(Item = name, Text = question) %>%
-        distinct() %>%
-        kable %>%
-        kable_styling(full_width = F)
+                               seq(from = 1, to = nrow(.))))) %>%
+        ggplot(aes(x = name, y = percent, col = site, group = site)) +
+        geom_point() +
+        geom_line() +
+        labs(x = "Item", y = "% Missing", color = "Site") +
+        theme(legend.position = "top",
+              axis.text.x = element_text(angle = 90))
     }
-  }else{
-    if(survey == "All"){
-      if(picked_id == "All"){ # Look at list of completed surveys for specific site
-        overall_attempted_table %>%
-          filter(site == picked_site) %>%
-          mutate(Missing = paste0(number_missing, " (", round(percent_missing, 1), "%)")) %>%
-          select(Survey = survey, Missing) %>%
-          mutate(Survey = str_replace(survey_names, "_", " "),
-                 Survey = str_to_title(Survey),
-                 Survey = ifelse(Survey %in% c("Adl", "Fhad", "Qpar", "Ses", "Swls"),
-                                 toupper(Survey), Survey)) %>%
-          kable() %>%
-          kable_styling(full_width = F)
-      }else{ # Look at list of completed surveys for a participant
-        overall_attempted_time %>%
-          filter(hml_id == picked_id) %>%
-          select(-c(hml_id, site)) %>%
-          mutate_all(~format(as.Date(.), "%b %d, %Y")) %>%
-          mutate_all(~ifelse(is.na(.), "Not Attempted", .)) %>%
-          rename_all(~str_to_title(str_replace(survey_names, "_", " "))) %>%
-          rename_all(~ifelse(. %in% c("Adl", "Fhad", "Qpar", "Ses", "Swls"),
-                             toupper(.), .)) %>%
-          pivot_longer(cols = everything(),
-                       names_to = "Survey",
-                       values_to = "Date Attempted") %>%
-          left_join(overall_attempted %>%
-                      filter(hml_id == picked_id) %>%
-                      select(-c(hml_id, site)) %>%
-                      rename_all(~str_to_title(str_replace(survey_names, "_", " "))) %>%
-                      rename_all(~ifelse(. %in% c("Adl", "Fhad", "Qpar", "Ses", "Swls"),
-                                         toupper(.), .)) %>%
-                      pivot_longer(cols = everything(),
-                                   names_to = "Survey",
-                                   values_to = "Completed"),
-                    by = "Survey") %>%
-          mutate(Completed = ifelse(`Date Attempted` == "Not Attempted", "", Completed)) %>%
-          kable(col.names = c("Survey", "Date Attempted", "")) %>%
-          kable_styling(full_width = F)
-      }
-    }else{
-      if(picked_id == "All"){ # Look at completed items for specific survey
+    
+  }
+}
+
+table_function <- function(picked_site = "All", survey = "All", picked_id = "All", visit = 1) {
+  if (picked_site == "All") {
+    if (survey == "All") { # Look at all surveys for all sites
+      overall_attempted_table %>%
+        filter(survey_visit_number == visit) %>%
+        mutate(site = factor(site, levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
+        arrange(site) %>%
+        mutate(
+          counts = paste0(number_missing, " (", round(percent_missing, 1), "%)"),
+          site = paste0(str_to_title(site), " (n = ", total_surveys, ")")
+        ) %>%
+        pivot_wider(id_cols = survey, names_from = site, values_from = counts) %>%
+        mutate(survey = case_when(
+          survey == "ANX" ~ "Anxiety",
+          survey == "BD" ~ "Brain Disease",
+          survey == "C19" ~ "Covid-19",
+          survey == "DIET" ~ "Diet",
+          survey == "HM" ~ "Health Medical",
+          survey == "SLEEP" ~ "Sleep",
+          survey == "SOCSTRESS" ~ "Social Stressor",
+          survey == "SOCSUPP" ~ "Social Support",
+          survey == "STRESS" ~ "Perceived Stress",
+          survey == "SUBENG" ~ "Subjective English",
+          TRUE ~ survey
+        )) %>%
+        rename(Survey = survey) %>%
+        kable() %>%
+        kable_styling(full_width = F)
+    } else { # Look at a specific survey for all sites
+      if (visit == 2 & survey %in% remove_from_second_visit) {
+        print("Survey not required for second visit.")
+      } else {
         files_list[[survey]] %>%
-          filter(site == picked_site) %>%
-          select(-c(hml_id, record_id, site, ends_with("_timestamp"), ends_with("_completed"))) %>%
-          mutate(across(everything(), ~ifelse(is.na(.) | . == "", 1, 0)),
+          filter(survey_visit_number == visit) %>%
+          select(-c(hml_id, record_id, survey_visit_number, ends_with("_timestamp"), ends_with("_completed"))) %>%
+          rbind(files_list[[survey]] %>%
+                  filter(survey_visit_number == visit) %>%
+                  select(-c(hml_id, record_id, survey_visit_number, ends_with("_timestamp"), ends_with("_completed"))) %>%
+                  mutate(site = "All")) %>%
+          group_by(site) %>%
+          mutate(across(everything(), ~ ifelse(is.na(.) | . == "", 1, 0)),
                  nrow = n()) %>%
-          pivot_longer(cols = -nrow) %>%
-          group_by(name) %>%
+          pivot_longer(cols = -c(nrow, site)) %>%
+          group_by(name, .add = T) %>%
           reframe(sum = sum(value),
-                    percent = sum(value)/nrow * 100,
-                    total = nrow) %>%
+                  percent = sum(value) / nrow * 100,
+                  total = nrow) %>%
           distinct() %>%
-          mutate(name = factor(name, 
-                               levels = paste0(
-                                 str_match(.$name[1], ".*\\_"), "v1.0.", 
-                                 seq(from = 1, to = nrow(.)))),
-                 counts = paste0(sum, " (", round(percent, 1), "%)")) %>%
+          ungroup() %>%
+          mutate(site = factor(site, levels = c("Atlanta", "Baltimore", "Miami", "Tucson", "All"))) %>%
+          arrange(site) %>%
+          mutate(
+            site = paste0(str_to_title(site), " (n = ", total, ")"),
+            name = factor(name, levels = paste0(str_match(.$name[1], ".*\\_"), "v1.0.", seq(from = 1, to = nrow(.)))),
+            counts = paste0(sum, " (", round(percent, 1), "%)")
+          ) %>%
+          pivot_wider(id_cols = name, names_from = site, values_from = counts) %>%
           arrange(name) %>%
-          left_join(survey_data_dictionary %>% select(name = item, question),
-                    by = "name") %>%
+          left_join(survey_data_dictionary %>% select(name = item, question), by = "name") %>%
           select(name, question, everything()) %>%
-          select(Item = name, Text = question, `Percent Missing` = counts) %>%
+          rename(Item = name, Text = question) %>%
           distinct() %>%
           kable %>%
           kable_styling(full_width = F)
-      }else{ # Look at specific answers for a participant
+      }
+    }
+  } else { # Looking at specific sites
+    if (survey == "All") {
+      overall_attempted_time %>%
+        filter(hml_id == picked_id, survey_visit_number == visit) %>%
+        pivot_longer(cols = -c(hml_id, site, survey_visit_number),
+                     names_to = "Survey", values_to = "Date Attempted") %>%
+        filter(!(survey_visit_number == 2 & Survey %in% paste0(remove_from_second_visit, "_timestamp"))) %>%
+        select(-c(hml_id, site, survey_visit_number)) %>%
+        mutate(
+          Survey = case_when(
+            Survey == "ANX_timestamp" ~ "Anxiety",
+            Survey == "BD_timestamp" ~ "Brain Disease",
+            Survey == "C19_timestamp" ~ "Covid-19",
+            Survey == "DIET_timestamp" ~ "Diet",
+            Survey == "HM_timestamp" ~ "Health Medical",
+            Survey == "SLEEP_timestamp" ~ "Sleep",
+            Survey == "SOCSTRESS_timestamp" ~ "Social Stressor",
+            Survey == "SOCSUPP_timestamp" ~ "Social Support",
+            Survey == "STRESS_timestamp" ~ "Perceived Stress",
+            Survey == "SUBENG_timestamp" ~ "Subjective English",
+            TRUE ~ str_remove(Survey, "_timestamp")
+          ),
+          `Date Attempted` = ifelse(is.na(`Date Attempted`), "Not Attempted",
+                                    format(as.Date(`Date Attempted`), "%b %d, %Y"))
+        ) %>%
+        left_join(
+          overall_attempted %>%
+            filter(hml_id == picked_id, survey_visit_number == visit) %>%
+            select(-c(hml_id, site, survey_visit_number)) %>%
+            pivot_longer(cols = everything(), names_to = "Survey", values_to = "Completed") %>%
+            mutate(Survey = case_when(
+              Survey == "ANX_completed" ~ "Anxiety",
+              Survey == "BD_completed" ~ "Brain Disease",
+              Survey == "C19_completed" ~ "Covid-19",
+              Survey == "DIET_completed" ~ "Diet",
+              Survey == "HM_completed" ~ "Health Medical",
+              Survey == "SLEEP_completed" ~ "Sleep",
+              Survey == "SOCSTRESS_completed" ~ "Social Stressor",
+              Survey == "SOCSUPP_completed" ~ "Social Support",
+              Survey == "STRESS_completed" ~ "Perceived Stress",
+              Survey == "SUBENG_completed" ~ "Subjective English",
+              TRUE ~ str_remove(Survey, "_completed")
+            )),
+          by = "Survey"
+        ) %>%
+        mutate(
+          Completed = ifelse(`Date Attempted` == "Not Attempted", "Not Attempted", Completed),
+          `Date Attempted` = ifelse(`Date Attempted` == "Not Attempted", "", `Date Attempted`)
+        ) %>%
+        kable(col.names = c("Survey", "Date Attempted", "Completion Status")) %>%
+        kable_styling(full_width = F)
+    } else { # Look at specific answers for a participant
+      if (visit == 2 & survey %in% remove_from_second_visit) {
+        print("Survey not required for second visit.")
+      } else {
         files_list[[survey]] %>%
-          filter(site == picked_site, hml_id == picked_id) %>%
-          select(-c(hml_id, record_id, site, ends_with("_timestamp"), ends_with("_completed"))) %>%
+          filter(hml_id == picked_id, survey_visit_number == visit) %>%
+          select(-c(hml_id, record_id, site, survey_visit_number, ends_with("_timestamp"), ends_with("_completed"))) %>%
           select(paste0(str_extract(names(.), ".*(?=_)"), "_v1.0.", 1:ncol(.))) %>%
           mutate_all(as.character) %>%
-          pivot_longer(cols = everything(),
-                       names_to = "Item",
-                       values_to = "Response") %>%
+          pivot_longer(cols = everything(), names_to = "Item", values_to = "Response") %>%
           mutate(Response = ifelse(is.na(Response) | Response == "", "Missing",
-                                   ifelse(Response == "Not missing", "Not Applicable",
-                                          Response))) %>%
-          left_join(survey_data_dictionary %>% select(name = item, question),
-                    by = c("Item" = "name")) %>%
+                                   ifelse(Response == "Not missing", "Not Applicable", Response))) %>%
+          left_join(survey_data_dictionary %>% select(name = item, question), by = c("Item" = "name")) %>%
           select(Item, Text = question, Response) %>%
           distinct() %>%
           kable %>%
@@ -436,18 +541,20 @@ table_function <- function(picked_site = "All", survey = "All", picked_id = "All
   }
 }
 
+
 ```
 
 ```{r function for downloaded data and download handler}
 
-download_data_function <- function(picked_id){
+download_data_function <- function(picked_id, visit){
   
   # Display progress bar
   withProgress(message = "Creating REDCap Data... Please Wait", {
     # Format data for redcap!
     redcap_files_list <- lapply(files_list, function(x){
       completed_x <- x %>%
-        filter(hml_id == picked_id) %>%
+        filter(hml_id == picked_id, survey_visit_number == visit) %>%
+        select(-c(hml_id, survey_visit_number, site)) %>%
         mutate(across(-c(record_id, ends_with("_timestamp")), 
                       ~ifelse(is.na(.) | . == "", 1, 0))) %>%
         mutate(missing = select(., -c(record_id, ends_with("_timestamp"))) %>%
@@ -457,13 +564,13 @@ download_data_function <- function(picked_id){
         select(record_id, ends_with("_complete"))
       
       new_x <- x %>%
-        filter(hml_id == picked_id) %>%
+        filter(hml_id == picked_id, survey_visit_number == visit) %>%
         left_join(completed_x, by = "record_id") %>%
         mutate(record_id = as.character(record_id)) %>%
         select(-contains("_completed")) %>%
         select(record_id, hml_id,
                contains("_timestamp"),
-               paste0(str_extract(names(.)[ncol(.)], ".*(?=_)"), "_v1.0.", 1:(ncol(.)-5)),
+               paste0(str_extract(names(.)[ncol(.)], ".*(?=_)"), "_v1.0.", 1:(ncol(.)-6)),
                ends_with("_complete")) %>%
         rename_all(~tolower(str_replace_all(., "\\.", ""))) %>%
         arrange(as.numeric(record_id))
@@ -471,7 +578,10 @@ download_data_function <- function(picked_id){
       new_x
     })
     
-    redcap_data <- redcap_formatting(redcap_files_list)
+    # Remove surveys not required for second visits
+    if(visit != 1) redcap_files_list <- redcap_files_list[!(names(redcap_files_list) %in% c("brain_disease", "covid", "fhad", "health_medical", "ses", "subjective_english"))]
+    
+    redcap_data <- redcap_formatting(redcap_files_list, visit_number = visit, picked_id = picked_id)
   })
   
   redcap_data_participant <- redcap_data %>% select(-hml_id)
@@ -479,42 +589,66 @@ download_data_function <- function(picked_id){
   return(redcap_data_participant)
 }
 
-output$downloadDataTucson <- downloadHandler(
+# Download handler for overall data:
+output$downloadOverallData <- downloadHandler(
   filename = function(){
-    paste0("data_", picked_id_tucson(), "_", format(Sys.Date(), "%y%m%d"), ".csv")
+    paste0("survey_data_completion_", format(Sys.Date(), "%y%m%d"), ".csv")
   },
   content = function(file){
-    write.csv(download_data_function(picked_id_tucson()), file,
+    write.csv(overall_attempted_all_participants, file, row.names = FALSE)
+  }
+)
+
+# Download handlers for participants:
+
+output$downloadDataTucson <- downloadHandler(
+  filename = function(){
+    paste0("data_", picked_id_tucson(), 
+           "_visit_", visitPick(),
+           "_", 
+           format(Sys.Date(), "%y%m%d"), ".csv")
+  },
+  content = function(file){
+    write.csv(download_data_function(picked_id_tucson(), visitPick()), file,
               row.names = FALSE)
   }
 )
 
 output$downloadDataAtlanta <- downloadHandler(
   filename = function(){
-    paste0("data_", picked_id_atlanta(), "_", format(Sys.Date(), "%y%m%d"), ".csv")
+    paste0("data_", picked_id_atlanta(), 
+           "_visit_", visitPick(),
+           "_", 
+           format(Sys.Date(), "%y%m%d"), ".csv")
   },
   content = function(file){
-    write.csv(download_data_function(picked_id_atlanta()), file,
+    write.csv(download_data_function(picked_id_atlanta(), visitPick()), file,
               row.names = FALSE)
   }
 )
 
 output$downloadDataBaltimore <- downloadHandler(
   filename = function(){
-    paste0("data_", picked_id_baltimore(), "_", format(Sys.Date(), "%y%m%d"), ".csv")
+    paste0("data_", picked_id_baltimore(), 
+           "_visit_", visitPick(),
+           "_", 
+           format(Sys.Date(), "%y%m%d"), ".csv")
   },
   content = function(file){
-    write.csv(download_data_function(picked_id_baltimore()), file,
+    write.csv(download_data_function(picked_id_baltimore(), visitPick()), file,
               row.names = FALSE)
   }
 )
 
 output$downloadDataMiami <- downloadHandler(
   filename = function(){
-    paste0("data_", picked_id_miami(), "_", format(Sys.Date(), "%y%m%d"), ".csv")
+    paste0("data_", picked_id_miami(), 
+           "_visit_", visitPick(),
+           "_", 
+           format(Sys.Date(), "%y%m%d"), ".csv")
   },
   content = function(file){
-    write.csv(download_data_function(picked_id_miami()), file,
+    write.csv(download_data_function(picked_id_miami(), visitPick()), file,
               row.names = FALSE)
   }
 )
@@ -532,30 +666,44 @@ output$downloadDataMiami <- downloadHandler(
 
 ```{r select survey input}
 
+radioButtons("visitPick", label = "Select a visit.",
+             choices = list("Baseline" = 1, "2YR Follow Up" = 2),
+             selected = 1)
+
+visitPick <- reactive({input$visitPick})
+
 radioButtons("surveyPick", label = "Select a specific survey to view more detailed information.",
-            choices = list(
-              "All" = "All",
-              "ADL" = "adl", 
-              "Anxiety" = "anxiety", 
-              "Brain Disease" = "brain_disease", 
-              "Covid" = "covid", 
-              "Diet" = "diet",
-              "FHAD" = "fhad",
-              "Health and Medical" = "health_medical",
-              "Perceived Stress" = "perceived_stress",
-              "QPAR" = "qpar",
-              "SES" = "ses",
-              "Sleep" = "sleep",
-              "Social Stressor" = "social_stressor",
-              "Social Support" = "social_support",
-              "Subjective English" = "subjective_english",
-              "SWLS" = "swls"
-            ),
-            selected = "All")
+             choices = list(
+               "All" = "All",
+               "ADL" = "adl", 
+               "Anxiety" = "anxiety", 
+               "Brain Disease" = "brain_disease", 
+               "Covid" = "covid", 
+               "Diet" = "diet",
+               "FHAD" = "fhad",
+               "Health and Medical" = "health_medical",
+               "Perceived Stress" = "perceived_stress",
+               "QPAR" = "qpar",
+               "SES" = "ses",
+               "Sleep" = "sleep",
+               "Social Stressor" = "social_stressor",
+               "Social Support" = "social_support",
+               "Subjective English" = "subjective_english",
+               "SWLS" = "swls"
+             ),
+             selected = "All")
 
 survey <- reactive({input$surveyPick})
 
 ```
+
+```{r download overall survey summary}
+
+renderUI({downloadButton("downloadOverallData", "Download Overall Completion Data",
+                         style="white-space: normal;")})
+
+```
+
 
 # Overall
 
@@ -568,9 +716,9 @@ Row
 
 renderPlot({
   if(survey() == "All"){
-    plot_function()
+    plot_function(visit = visitPick())
   }else{
-    plot_function(survey = survey())
+    plot_function(survey = survey(), visit = visitPick())
   }
 })
 
@@ -583,9 +731,9 @@ renderPlot({
 shiny::renderUI(
   HTML(
     if(survey() == "All"){
-      table_function()
+      table_function(visit = visitPick())
     }else{
-      table_function(survey = survey())
+      table_function(survey = survey(), visit = visitPick())
     }
   )
 )
@@ -604,8 +752,8 @@ Row
 <center>
 ```{r select id for tucson}
 
-selectInput("idPick_tucson", label = "Select a participant ID to view survey entres.",
-            choices = c(hml_ids$hml_id[hml_ids$site == "Tucson"]))
+selectInput("idPick_tucson", label = "Select a participant ID to view survey entries.",
+            choices = unique(hml_ids$hml_id[hml_ids$site == "Tucson"]))
 
 renderUI({downloadButton("downloadDataTucson", "Download Participant Data")})
 
@@ -618,17 +766,11 @@ picked_id_tucson <- reactive({input$idPick_tucson})
 
 shiny::renderUI(
   HTML(
-    if(survey() == "all"){
-      if(picked_id_tucson() == "All"){
-        table_function(picked_site = "Tucson")
+    if(isTruthy(input$idPick_tucson)){
+      if(survey() == "All"){
+        table_function(picked_site = "Tucson", picked_id = picked_id_tucson(), visit = visitPick())
       }else{
-        table_function(picked_site = "Tucson", picked_id = picked_id_tucson())
-      }
-    }else{
-      if(picked_id_tucson() == "All"){
-        table_function(picked_site = "Tucson", survey = survey())
-      }else{
-        table_function(picked_site = "Tucson", survey = survey(), picked_id = picked_id_tucson())
+        table_function(picked_site = "Tucson", survey = survey(), picked_id = picked_id_tucson(), visit = visitPick())
       }
     }
   )
@@ -648,8 +790,8 @@ Row
 <center>
 ```{r select id for atlanta}
 
-selectInput("idPick", label = "Select a participant ID to view survey entres.",
-            choices = c(hml_ids$hml_id[hml_ids$site == "Atlanta"]))
+selectInput("idPick_atlanta", label = "Select a participant ID to view survey entries.",
+            choices = unique(hml_ids$hml_id[which(hml_ids$site == "Atlanta")]))
 
 renderUI({downloadButton("downloadDataAtlanta", "Download Participant Data")})
 
@@ -657,21 +799,15 @@ renderUI({downloadButton("downloadDataAtlanta", "Download Participant Data")})
 </center>
 ```{r display surveys for atlanta}
 
-picked_id_atlanta <- reactive({input$idPick})
+picked_id_atlanta <- reactive({input$idPick_atlanta})
 
 shiny::renderUI(
   HTML(
-    if(survey() == "All"){
-      if(picked_id_atlanta() == "All"){
-        table_function(picked_site = "Atlanta")
+    if(isTruthy(input$idPick_atlanta)){
+      if(survey() == "All"){
+        table_function(picked_site = "Atlanta", picked_id = picked_id_atlanta(), visit = visitPick())
       }else{
-        table_function(picked_site = "Atlanta", picked_id = picked_id_atlanta())
-      }
-    }else{
-      if(picked_id_atlanta() == "All"){
-        table_function(picked_site = "Atlanta", survey = survey())
-      }else{
-        table_function(picked_site = "Atlanta", survey = survey(), picked_id = picked_id_atlanta())
+        table_function(picked_site = "Atlanta", survey = survey(), picked_id = picked_id_atlanta(), visit = visitPick())
       }
     }
   )
@@ -690,8 +826,8 @@ Row
 <center>
 ```{r select id for baltimore}
 
-selectInput("idPick_baltimore", label = "Select a participant ID to view survey entres.",
-            choices = c(hml_ids$hml_id[hml_ids$site == "Baltimore"]))
+selectInput("idPick_baltimore", label = "Select a participant ID to view survey entries.",
+            choices = unique(hml_ids$hml_id[hml_ids$site == "Baltimore"]))
 
 renderUI({downloadButton("downloadDataBaltimore", "Download Participant Data")})
 
@@ -703,17 +839,13 @@ picked_id_baltimore <- reactive({input$idPick_baltimore})
 
 shiny::renderUI(
   HTML(
-    if(survey() == "All"){
-      if(picked_id_baltimore() == "All"){
-        table_function(picked_site = "Baltimore")
+    if(isTruthy(input$idPick_baltimore)){
+      if(survey() == "All"){
+        table_function(picked_site = "Baltimore", picked_id = picked_id_baltimore(), visit = visitPick())
+        
       }else{
-        table_function(picked_site = "Baltimore", picked_id = picked_id_baltimore())
-      }
-    }else{
-      if(picked_id_baltimore() == "All"){
-        table_function(picked_site = "Baltimore", survey = survey())
-      }else{
-        table_function(picked_site = "Baltimore", survey = survey(), picked_id = picked_id_baltimore())
+        table_function(picked_site = "Baltimore", survey = survey(), picked_id = picked_id_baltimore(), visit = visitPick())
+        
       }
     }
   )
@@ -734,8 +866,8 @@ Row
 <center>
 ```{r select id for miami}
 
-selectInput("idPick_miami", label = "Select a participant ID to view survey entres.",
-            choices = c(hml_ids$hml_id[hml_ids$site == "Miami"]))
+selectInput("idPick_miami", label = "Select a participant ID to view survey entries.",
+            choices = unique(hml_ids$hml_id[which(hml_ids$site == "Miami")]))
 
 renderUI({downloadButton("downloadDataMiami", "Download Participant Data")})
 
@@ -747,17 +879,13 @@ picked_id_miami <- reactive({input$idPick_miami})
 
 shiny::renderUI(
   HTML(
-    if(survey() == "All"){
-      if(picked_id_miami() == "All"){
-        table_function(picked_site = "Miami")
+    if(isTruthy(input$idPick_miami)){
+      if(survey() == "All"){
+        table_function(picked_site = "Miami", picked_id = picked_id_miami(), visit = visitPick())
+        
       }else{
-        table_function(picked_site = "Miami", picked_id = picked_id_miami())
-      }
-    }else{
-      if(picked_id_miami() == "All"){
-        table_function(picked_site = "Miami", survey = survey())
-      }else{
-        table_function(picked_site = "Miami", survey = survey(), picked_id = picked_id_miami())
+        table_function(picked_site = "Miami", survey = survey(), picked_id = picked_id_miami(), visit = visitPick())
+        
       }
     }
   )
@@ -765,4 +893,3 @@ shiny::renderUI(
 
 
 ```
-
