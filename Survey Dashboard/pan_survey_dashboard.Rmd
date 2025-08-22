@@ -27,7 +27,7 @@ font-size: 22px;
 <!-- Server -->
 
 ```{r is_production, include = FALSE}
-production <- FALSE
+production <- TRUE
 ```
 
 ```{r setup, include=FALSE}
@@ -579,7 +579,7 @@ download_data_function <- function(picked_id, visit){
     })
     
     # Remove surveys not required for second visits
-    if(visit != 1) redcap_files_list <- redcap_files_list[!(names(redcap_files_list) %in% c("brain_disease", "covid", "fhad", "health_medical", "ses", "subjective_english"))]
+    if(visit != 1) redcap_files_list <- redcap_files_list[!(names(redcap_files_list) %in% c("brain_disease", "covid", "fhad", "ses", "subjective_english"))]
     
     redcap_data <- redcap_formatting(redcap_files_list, visit_number = visit, picked_id = picked_id)
   })

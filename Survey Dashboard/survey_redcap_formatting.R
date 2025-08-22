@@ -71,6 +71,353 @@ redcap_formatting <- function(redcap_files_list, visit_number, picked_id){
                                      "Intermittent Fasting", "Gluten-free"),
                       none = "None of the above")
   
+  # Health Medical --------
+  
+  # redcap_files_list[["health_medical"]] <- redcap_files_list[["health_medical"]] %>%
+  #   mutate(across(c(hm_v103:hm_v106, hm_v108, hm_v109, hm_v1012, hm_v1014, hm_v1016, hm_v1018,
+  #                   hm_v1021, hm_v1024, hm_v1026, hm_v1027, hm_v1028, hm_v1030:hm_v1032, hm_v1034,
+  #                   hm_v1036:hm_v1039, hm_v1042, hm_v1044, hm_v1046, hm_v1047, hm_v1050, hm_v1052, 
+  #                   hm_v1054, hm_v1057),
+  #                 ~case_when(. == "Yes" ~ 1,
+  #                            . == "No" ~ 0,
+  #                            . == "I don't know" ~ 333,
+  #                            . == "Prefer not to answer" ~ 999)),
+  #          hm_v107 = case_when(hm_v107 == "No" ~ 0,
+  #                              hm_v107 == "Hearing aid" ~ 1,
+  #                              hm_v107 == "Cochlear implant" ~ 2),
+  #          hm_v1010 = case_when(hm_v1010 == "1 Not controlled" ~ 1,
+  #                               hm_v1010 == "2" ~ 2,
+  #                               hm_v1010 == "3 Somewhat controlled" ~ 3,
+  #                               hm_v1010 == "4" ~ 4,
+  #                               hm_v1010 == "5 Very well controlled" ~ 5),
+  #          hm_v1033 = case_when(hm_v1033 == "A. With medication" ~ 1,
+  #                               hm_v1033 == "B. With diet/exercise or other non-pharmaceutical means" ~ 2,
+  #                               hm_v1033 == "C. Both A and B" ~ 3)) %>%
+  #   checkbox_function(variable = "hm_v1017",
+  #                     checkboxes = c("Grand Mal", "Absence", "Myoclonic",
+  #                                    "Clonic", "Tonic", "Atonic", "Childhood febrile",
+  #                                    "I dont know"),
+  #                     none = NA, keep = T) %>%
+  #   mutate(hm_v1017___555 = ifelse(str_detect(hm_v1017, "Other"), "1", "0"),
+  #          hm_v1017_oth = ifelse(hm_v1017___555 == "1", hm_v1017, ""),
+  #          .before = hm_v1017) %>%
+  #   select(-hm_v1017) %>%
+  #   checkbox_function(variable = "hm_v1019",
+  #                     checkboxes = c("Migraines", "Tension", "Cluster", "Thunderclap",
+  #                                    "Post Head Trauma"),
+  #                     none = NA, keep = T) %>%
+  #   mutate(hm_v1019___555 = ifelse(str_detect(hm_v1019, "Other"), "1", "0"),
+  #          hm_v1019_oth = ifelse(hm_v1019___555 == "1", hm_v1019, ""),
+  #          .before = hm_v1019) %>%
+  #   select(-hm_v1019) %>%
+  #   checkbox_function(variable = "hm_v1020",
+  #                     checkboxes = c("Family physician", "Neurologist", "Self"),
+  #                     none = NA, keep = T) %>%
+  #   mutate(hm_v1020___4 = ifelse(str_detect(hm_v1020, "Other"), "1", "0"),
+  #          hm_v1020_oth = ifelse(hm_v1020___4 == "1", hm_v1020, ""),
+  #          .before = hm_v1020) %>%
+  #   select(-hm_v1020) %>%
+  #   checkbox_function(variable = "hm_v1022",
+  #                     checkboxes = c("Ataxia", "Cerebral palsy", "Chorea", "Huntingtons disease", "Tardive dyskinesia",
+  #                                    "Dystonia", "Essential tremor", "Parkinsons disease", "Restless legs syndrome",
+  #                                    "Spasms", "Stereotypy", "Tic disorders", "Tourettes syndrome", "Wilsons disease"),
+  #                     none = NA, keep = T) %>%
+  #   mutate(hm_v1022___15 = ifelse(str_detect(hm_v1022, "Other"), "1", "0"),
+  #          hm_v1022_oth = ifelse(hm_v1022___15 == "1", hm_v1022, ""),
+  #          .before = hm_v1022) %>%
+  #   select(-hm_v1022) %>%
+  #   mutate(hm_v1023 = str_remove_all(hm_v1023, ","),
+  #          hm_v1023_oth = ifelse(str_detect(hm_v1023, "Other"), hm_v1023, ""),
+  #          .after = hm_v1023) %>%
+  #   mutate(hm_v1023 = case_when(hm_v1023 == "Insomnia" ~ 1,
+  #                               hm_v1023 == "Sleep apnea" ~ 2,
+  #                               str_detect(hm_v1023, "Other") ~ 555,
+  #                               hm_v1023 == "None of the above" ~ 999)) %>%
+  #   checkbox_function(variable = "hm_v1025",
+  #                     checkboxes = c("Heart Disease", "Heart Attack", "Liver disease", "Kidney disease",
+  #                                    "Vascular disease", "Asthma", "Lung disease"),
+  #                     none = "None of the above") %>%
+  #   rename(hm_v1025___999 = hm_v1025___0) %>%
+  #   checkbox_function(variable = "hm_v1029",
+  #                     checkboxes = c("Depression", "Bipolar disorder", "Post-Traumatic Stress",
+  #                                    "General anxiety", "Panic attacks", "Phobia", "Schizophrenia",
+  #                                    "Substance use disorder", "Eating disorder"),
+  #                     none = NA, keep = T) %>%
+  #   mutate(hm_v1029___555 = ifelse(str_detect(hm_v1029, "Other"), "1", "0"),
+  #          hm_v1029_oth = ifelse(hm_v1029___555 == "1", 
+  #                                str_replace(hm_v1029, ".*Other \\(please specify\\):,", ""),
+  #                                ""),
+  #          .before = hm_v1029) %>%
+  #   select(-hm_v1029) %>%
+  #   mutate(hm_v1041 = case_when(hm_v1041 == "1 No Stress" ~ "1",
+  #                               hm_v1041 == "3 â\u0080\u0093 Moderate Stress" ~ "3",
+  #                               hm_v1041 == "3 Moderate Stress" ~ "3",
+  #                               hm_v1041 == "5 Great Deal of Stress" ~ "5",
+  #                               TRUE ~ hm_v1041),
+  #          hm_v1042 = ifelse(hm_v1042 == "I donât know", "I don't know", hm_v1042)) %>%
+  #   # Medication assignments (hm_v1055)
+  #   mutate(# Remove end commas and "No medications"
+  #     hm_v1055 = str_remove(hm_v1055, ",$"),
+  #     hm_v1055 = ifelse(hm_v1055 %in% c("No medications", ""), "", hm_v1055),
+  #     # Remove spaces around commas
+  #     hm_v1055 = str_remove_all(hm_v1055, "[:space:](?=,)|(?<=,)[:space:]"),
+  #     # First medication assignment
+  #     hm_v1055_1 = str_remove(hm_v1055, ",.*"),
+  #     hm_v1055 = str_remove(hm_v1055, "^.*?,"),
+  #     hm_v1055 = ifelse(hm_v1055 == hm_v1055_1, "", hm_v1055),
+  #     # Second medication assignment
+  #     hm_v1055_2 = str_remove(hm_v1055, ",.*"),
+  #     hm_v1055 = str_remove(hm_v1055, "^.*?,"),
+  #     hm_v1055 = ifelse(hm_v1055 == hm_v1055_2, "", hm_v1055),
+  #     # Third medication assignment
+  #     hm_v1055_3 = str_remove(hm_v1055, ",.*"),
+  #     hm_v1055 = str_remove(hm_v1055, "^.*?,"),
+  #     hm_v1055 = ifelse(hm_v1055 == hm_v1055_3, "", hm_v1055),
+  #     # Fourth medication assignment
+  #     hm_v1055_4 = str_remove(hm_v1055, ",.*"),
+  #     .after = hm_v1055) %>%
+  #   select(-hm_v1055) %>%
+  #   rename(hm_v1055 = hm_v1055_1) %>%
+  #   # Dose assignments (hm_v1056)
+  #   mutate(# Remove end commas and "Not missing"
+  #     hm_v1056 = str_remove(hm_v1056, ",$"),
+  #     hm_v1056 = ifelse(hm_v1056 %in% c("Not missing", ""), "", hm_v1056),
+  #     # Remove spaces around commas
+  #     hm_v1056 = str_remove_all(hm_v1056, "[:space:](?=,)|(?<=,)[:space:]"),
+  #     # First medication assignment
+  #     hm_v1056_1 = str_remove(hm_v1056, ",.*"),
+  #     hm_v1056 = str_remove(hm_v1056, "^.*?,"),
+  #     hm_v1056 = ifelse(hm_v1056 == hm_v1056_1, "", hm_v1056),
+  #     # Second medication assignment
+  #     hm_v1056_2 = str_remove(hm_v1056, ",.*"),
+  #     hm_v1056 = str_remove(hm_v1056, "^.*?,"),
+  #     hm_v1056 = ifelse(hm_v1056 == hm_v1056_2, "", hm_v1056),
+  #     # Third medication assignment
+  #     hm_v1056_3 = str_remove(hm_v1056, ",.*"),
+  #     hm_v1056 = str_remove(hm_v1056, "^.*?,"),
+  #     hm_v1056 = ifelse(hm_v1056 == hm_v1056_3, "", hm_v1056),
+  #     # Fourth medication assignment
+  #     hm_v1056_4 = str_remove(hm_v1056, ",.*"),
+  #     .after = hm_v1056) %>%
+  #   select(-hm_v1056) %>% rename(hm_v1056 = hm_v1056_1) %>%
+  #   # Is this medication prescribed by a physician? (Survey data only had one entry)
+  #   mutate(hm_v1057_2 = NA,
+  #          hm_v1057_3 = NA,
+  #          hm_v1057_4 = NA,
+  #          .after = hm_v1057) %>%
+  #   # Length of medication assignments (hm_v1058)
+  #   mutate(# Remove end commas and "Not missing"
+  #     hm_v1058 = str_remove(hm_v1058, ",$"),
+  #     hm_v1058 = ifelse(hm_v1058 %in% c("Not missing", ""), "", hm_v1058),
+  #     # Remove spaces around commas
+  #     hm_v1058 = str_remove_all(hm_v1058, "[:space:](?=,)|(?<=,)[:space:]"),
+  #     # First medication assignment
+  #     hm_v1058_1 = str_remove(hm_v1058, ",.*"),
+  #     hm_v1058 = str_remove(hm_v1058, "^.*?,"),
+  #     hm_v1058 = ifelse(hm_v1058 == hm_v1058_1, "", hm_v1058),
+  #     # Second medication assignment
+  #     hm_v1058_2 = str_remove(hm_v1058, ",.*"),
+  #     hm_v1058 = str_remove(hm_v1058, "^.*?,"),
+  #     hm_v1058 = ifelse(hm_v1058 == hm_v1058_2, "", hm_v1058),
+  #     # Third medication assignment
+  #     hm_v1058_3 = str_remove(hm_v1058, ",.*"),
+  #     hm_v1058 = str_remove(hm_v1058, "^.*?,"),
+  #     hm_v1058 = ifelse(hm_v1058 == hm_v1058_3, "", hm_v1058),
+  #     # Fourth medication assignment
+  #     hm_v1058_4 = str_remove(hm_v1058, ",.*"),
+  #     .after = hm_v1058) %>%
+  #   select(-hm_v1058) %>% rename(hm_v1058 = hm_v1058_1) %>%
+  #   # Reason for taking medication assignments (hm_v1059)
+  #   mutate(# Remove end commas and "Not missing"
+  #     hm_v1059 = str_remove(hm_v1059, ",$"),
+  #     hm_v1059 = ifelse(hm_v1059 %in% c("Not missing", ""), "", hm_v1059),
+  #     # Remove spaces around commas
+  #     hm_v1059 = str_remove_all(hm_v1059, "[:space:](?=,)|(?<=,)[:space:]"),
+  #     # First medication assignment
+  #     hm_v1059_1 = str_remove(hm_v1059, ",.*"),
+  #     hm_v1059 = str_remove(hm_v1059, "^.*?,"),
+  #     hm_v1059 = ifelse(hm_v1059 == hm_v1059_1, "", hm_v1059),
+  #     # Second medication assignment
+  #     hm_v1059_2 = str_remove(hm_v1059, ",.*"),
+  #     hm_v1059 = str_remove(hm_v1059, "^.*?,"),
+  #     hm_v1059 = ifelse(hm_v1059 == hm_v1059_2, "", hm_v1059),
+  #     # Third medication assignment
+  #     hm_v1059_3 = str_remove(hm_v1059, ",.*"),
+  #     hm_v1059 = str_remove(hm_v1059, "^.*?,"),
+  #     hm_v1059 = ifelse(hm_v1059 == hm_v1059_3, "", hm_v1059),
+  #     # Fourth medication assignment
+  #     hm_v1059_4 = str_remove(hm_v1059, ",.*"),
+  #     .after = hm_v1059) %>%
+  #   select(-hm_v1059) %>% rename(hm_v1059 = hm_v1059_1) %>%
+  #   rename(healthmed_complete = hm_complete)
+  
+  # 15-Aug-2025: Expanded REDCap survey data to include up to 30 medication entries
+  # Format non-medication health medical entries
+  non_medication_health_medical <- redcap_files_list[["health_medical"]] %>%
+    select(-c(hm_v1055, hm_v1056, hm_v1057, hm_v1058, hm_v1059)) %>%
+    mutate(across(c(hm_v103:hm_v106, hm_v108, hm_v109, hm_v1012, hm_v1014, hm_v1016, hm_v1018,
+                    hm_v1021, hm_v1024, hm_v1026, hm_v1027, hm_v1028, hm_v1030:hm_v1032, hm_v1034,
+                    hm_v1036:hm_v1039, hm_v1042, hm_v1044, hm_v1046, hm_v1047, hm_v1050, hm_v1052, 
+                    hm_v1054),
+                  ~case_when(. == "Yes" ~ 1,
+                             . == "No" ~ 0,
+                             . == "I don't know" ~ 333,
+                             . == "Prefer not to answer" ~ 999)),
+           hm_v107 = case_when(hm_v107 == "No" ~ 0,
+                               hm_v107 == "Hearing aid" ~ 1,
+                               hm_v107 == "Cochlear implant" ~ 2),
+           hm_v1010 = case_when(hm_v1010 == "1 Not controlled" ~ 1,
+                                hm_v1010 == "2" ~ 2,
+                                hm_v1010 == "3 Somewhat controlled" ~ 3,
+                                hm_v1010 == "4" ~ 4,
+                                hm_v1010 == "5 Very well controlled" ~ 5),
+           hm_v1033 = case_when(hm_v1033 == "A. With medication" ~ 1,
+                                hm_v1033 == "B. With diet/exercise or other non-pharmaceutical means" ~ 2,
+                                hm_v1033 == "C. Both A and B" ~ 3)) %>%
+    checkbox_function(variable = "hm_v1017",
+                      checkboxes = c("Grand Mal", "Absence", "Myoclonic",
+                                     "Clonic", "Tonic", "Atonic", "Childhood febrile",
+                                     "I dont know"),
+                      none = NA, keep = T) %>%
+    mutate(hm_v1017___555 = ifelse(str_detect(hm_v1017, "Other"), "1", "0"),
+           hm_v1017_oth = ifelse(hm_v1017___555 == "1", hm_v1017, ""),
+           .before = hm_v1017) %>%
+    select(-hm_v1017) %>%
+    checkbox_function(variable = "hm_v1019",
+                      checkboxes = c("Migraines", "Tension", "Cluster", "Thunderclap",
+                                     "Post Head Trauma"),
+                      none = NA, keep = T) %>%
+    mutate(hm_v1019___555 = ifelse(str_detect(hm_v1019, "Other"), "1", "0"),
+           hm_v1019_oth = ifelse(hm_v1019___555 == "1", hm_v1019, ""),
+           .before = hm_v1019) %>%
+    select(-hm_v1019) %>%
+    checkbox_function(variable = "hm_v1020",
+                      checkboxes = c("Family physician", "Neurologist", "Self"),
+                      none = NA, keep = T) %>%
+    mutate(hm_v1020___4 = ifelse(str_detect(hm_v1020, "Other"), "1", "0"),
+           hm_v1020_oth = ifelse(hm_v1020___4 == "1", hm_v1020, ""),
+           .before = hm_v1020) %>%
+    select(-hm_v1020) %>%
+    checkbox_function(variable = "hm_v1022",
+                      checkboxes = c("Ataxia", "Cerebral palsy", "Chorea", "Huntingtons disease", "Tardive dyskinesia",
+                                     "Dystonia", "Essential tremor", "Parkinsons disease", "Restless legs syndrome",
+                                     "Spasms", "Stereotypy", "Tic disorders", "Tourettes syndrome", "Wilsons disease"),
+                      none = NA, keep = T) %>%
+    mutate(hm_v1022___15 = ifelse(str_detect(hm_v1022, "Other"), "1", "0"),
+           hm_v1022_oth = ifelse(hm_v1022___15 == "1", hm_v1022, ""),
+           .before = hm_v1022) %>%
+    select(-hm_v1022) %>%
+    mutate(hm_v1023 = str_remove_all(hm_v1023, ","),
+           hm_v1023_oth = ifelse(str_detect(hm_v1023, "Other"), hm_v1023, ""),
+           .after = hm_v1023) %>%
+    mutate(hm_v1023 = case_when(hm_v1023 == "Insomnia" ~ 1,
+                                hm_v1023 == "Sleep apnea" ~ 2,
+                                str_detect(hm_v1023, "Other") ~ 555,
+                                hm_v1023 == "None of the above" ~ 999)) %>%
+    checkbox_function(variable = "hm_v1025",
+                      checkboxes = c("Heart Disease", "Heart Attack", "Liver disease", "Kidney disease",
+                                     "Vascular disease", "Asthma", "Lung disease"),
+                      none = "None of the above") %>%
+    rename(hm_v1025___999 = hm_v1025___0) %>%
+    checkbox_function(variable = "hm_v1029",
+                      checkboxes = c("Depression", "Bipolar disorder", "Post-Traumatic Stress",
+                                     "General anxiety", "Panic attacks", "Phobia", "Schizophrenia",
+                                     "Substance use disorder", "Eating disorder"),
+                      none = NA, keep = T) %>%
+    mutate(hm_v1029___555 = ifelse(str_detect(hm_v1029, "Other"), "1", "0"),
+           hm_v1029_oth = ifelse(hm_v1029___555 == "1", 
+                                 str_replace(hm_v1029, ".*Other \\(please specify\\):,", ""),
+                                 ""),
+           .before = hm_v1029) %>%
+    select(-hm_v1029) %>%
+    mutate(hm_v1041 = case_when(hm_v1041 == "1 No Stress" ~ "1",
+                                hm_v1041 == "3 â\u0080\u0093 Moderate Stress" ~ "3",
+                                hm_v1041 == "3 Moderate Stress" ~ "3",
+                                hm_v1041 == "5 Great Deal of Stress" ~ "5",
+                                TRUE ~ hm_v1041),
+           hm_v1042 = ifelse(hm_v1042 == "I donât know", "I don't know", hm_v1042),
+           hm_v1043 = case_when(hm_v1043 == "Identical" ~  "1",
+                                hm_v1043 == "Fraternal" ~  "2",
+                                hm_v1043 == "I don`t know" ~  "333",
+                                TRUE ~ hm_v1043)) 
+  
+  # Set up REDCap medication format:
+  redcap_hm_medications_entries <- c(
+    # Medication 
+    paste0("hm_v1055_", 1:30),
+    # Daily dosages
+    paste0("hm_v1056_", 1:30),
+    # Prescribed by physician?
+    paste0("hm_v1057_", 1:30),
+    # Length of medication assignment
+    paste0("hm_v1058_", 1:30),
+    # Reason for taking medication
+    paste0("hm_v1059_", 1:30)
+  ) %>%
+    tibble() %>% rename(redcap_variable_name = 1) %>%
+    mutate(hml_id = picked_id,
+           participant_entry = "")
+  
+  # Did participant list any medications?
+  if(!is.na(redcap_files_list[["health_medical"]]$hm_v1055)){
+    if(redcap_files_list[["health_medical"]]$hm_v1055 != "No medications"){
+      # Get number of medications
+      number_medications <- length(str_split_1(redcap_files_list[["health_medical"]]$hm_v1055, ","))
+      
+      # Format medication entries from participant
+      mindcrowd_med_data <- redcap_files_list[["health_medical"]] %>%
+        select(hml_id, hm_v1055, hm_v1056, hm_v1057, hm_v1058, hm_v1059) %>%
+        mutate(hm_v1057 = str_replace_all(hm_v1057, "Yes", "1") %>% str_replace_all("No", "0")) %>%
+        rowwise() %>%
+        mutate(
+          # split into lists
+          across(starts_with("hm_v"), ~ str_split(., ",")),
+          # truncate all to that length
+          across(starts_with("hm_v"), ~ .x[seq_len(number_medications)] %>% paste(collapse = ","))
+        ) %>%
+        separate_longer_delim(c(hm_v1055, hm_v1056, hm_v1057, hm_v1058, hm_v1059), 
+                              delim = ",") %>%
+        mutate(across(everything(), ~ifelse(. == "NA", "", .)))
+      
+      # Max 30 entries:
+      if(number_medications > 30) mindcrowd_med_data <- mindcrowd_med_data[1:30,]
+      
+      # Fill in separate medication entries
+      for(entry in 1:number_medications){
+        # Medication
+        redcap_hm_medications_entries$participant_entry[
+          which(redcap_hm_medications_entries$redcap_variable_name == paste0("hm_v1055_", entry))] <- mindcrowd_med_data$hm_v1055[entry]
+        
+        # Daily dosage
+        redcap_hm_medications_entries$participant_entry[
+          which(redcap_hm_medications_entries$redcap_variable_name == paste0("hm_v1056_", entry))] <- mindcrowd_med_data$hm_v1056[entry]
+        
+        # Prescribed by physician?
+        redcap_hm_medications_entries$participant_entry[
+          which(redcap_hm_medications_entries$redcap_variable_name == paste0("hm_v1057_", entry))] <- mindcrowd_med_data$hm_v1057[entry]
+        
+        # Length of medication assignment
+        redcap_hm_medications_entries$participant_entry[
+          which(redcap_hm_medications_entries$redcap_variable_name == paste0("hm_v1058_", entry))] <- mindcrowd_med_data$hm_v1058[entry]
+        
+        # Reason for taking medication
+        redcap_hm_medications_entries$participant_entry[
+          which(redcap_hm_medications_entries$redcap_variable_name == paste0("hm_v1059_", entry))] <- mindcrowd_med_data$hm_v1059[entry]
+      }
+    } 
+  }
+  
+  medication_health_medical <- redcap_hm_medications_entries %>%
+    mutate(redcap_variable_name = str_remove(redcap_variable_name, "_1$")) %>%
+    pivot_wider(id_cols = hml_id,
+                names_from = redcap_variable_name,
+                values_from = participant_entry)
+  
+  # Join non-medication and medication data and finalize
+  redcap_files_list[["health_medical"]] <- left_join(non_medication_health_medical, medication_health_medical, by = "hml_id") %>%
+    mutate(healthmed_complete = hm_complete) %>%
+    select(-hm_complete)
+  
   # Perceived Stress ------
   
   redcap_files_list[["perceived_stress"]] <- redcap_files_list[["perceived_stress"]] %>%
@@ -237,349 +584,6 @@ redcap_formatting <- function(redcap_files_list, visit_number, picked_id){
                                     fhad_v1013 == "Prefer not to answer" ~ 999)) %>%
       select(-fhad_v104)
     
-    # Health and Medical
-    
-    # redcap_files_list[["health_medical"]] <- redcap_files_list[["health_medical"]] %>%
-    #   mutate(across(c(hm_v103:hm_v106, hm_v108, hm_v109, hm_v1012, hm_v1014, hm_v1016, hm_v1018,
-    #                   hm_v1021, hm_v1024, hm_v1026, hm_v1027, hm_v1028, hm_v1030:hm_v1032, hm_v1034,
-    #                   hm_v1036:hm_v1039, hm_v1042, hm_v1044, hm_v1046, hm_v1047, hm_v1050, hm_v1052, 
-    #                   hm_v1054, hm_v1057),
-    #                 ~case_when(. == "Yes" ~ 1,
-    #                            . == "No" ~ 0,
-    #                            . == "I don't know" ~ 333,
-    #                            . == "Prefer not to answer" ~ 999)),
-    #          hm_v107 = case_when(hm_v107 == "No" ~ 0,
-    #                              hm_v107 == "Hearing aid" ~ 1,
-    #                              hm_v107 == "Cochlear implant" ~ 2),
-    #          hm_v1010 = case_when(hm_v1010 == "1 Not controlled" ~ 1,
-    #                               hm_v1010 == "2" ~ 2,
-    #                               hm_v1010 == "3 Somewhat controlled" ~ 3,
-    #                               hm_v1010 == "4" ~ 4,
-    #                               hm_v1010 == "5 Very well controlled" ~ 5),
-    #          hm_v1033 = case_when(hm_v1033 == "A. With medication" ~ 1,
-    #                               hm_v1033 == "B. With diet/exercise or other non-pharmaceutical means" ~ 2,
-    #                               hm_v1033 == "C. Both A and B" ~ 3)) %>%
-    #   checkbox_function(variable = "hm_v1017",
-    #                     checkboxes = c("Grand Mal", "Absence", "Myoclonic",
-    #                                    "Clonic", "Tonic", "Atonic", "Childhood febrile",
-    #                                    "I dont know"),
-    #                     none = NA, keep = T) %>%
-    #   mutate(hm_v1017___555 = ifelse(str_detect(hm_v1017, "Other"), "1", "0"),
-    #          hm_v1017_oth = ifelse(hm_v1017___555 == "1", hm_v1017, ""),
-    #          .before = hm_v1017) %>%
-    #   select(-hm_v1017) %>%
-    #   checkbox_function(variable = "hm_v1019",
-    #                     checkboxes = c("Migraines", "Tension", "Cluster", "Thunderclap",
-    #                                    "Post Head Trauma"),
-    #                     none = NA, keep = T) %>%
-    #   mutate(hm_v1019___555 = ifelse(str_detect(hm_v1019, "Other"), "1", "0"),
-    #          hm_v1019_oth = ifelse(hm_v1019___555 == "1", hm_v1019, ""),
-    #          .before = hm_v1019) %>%
-    #   select(-hm_v1019) %>%
-    #   checkbox_function(variable = "hm_v1020",
-    #                     checkboxes = c("Family physician", "Neurologist", "Self"),
-    #                     none = NA, keep = T) %>%
-    #   mutate(hm_v1020___4 = ifelse(str_detect(hm_v1020, "Other"), "1", "0"),
-    #          hm_v1020_oth = ifelse(hm_v1020___4 == "1", hm_v1020, ""),
-    #          .before = hm_v1020) %>%
-    #   select(-hm_v1020) %>%
-    #   checkbox_function(variable = "hm_v1022",
-    #                     checkboxes = c("Ataxia", "Cerebral palsy", "Chorea", "Huntingtons disease", "Tardive dyskinesia",
-    #                                    "Dystonia", "Essential tremor", "Parkinsons disease", "Restless legs syndrome",
-    #                                    "Spasms", "Stereotypy", "Tic disorders", "Tourettes syndrome", "Wilsons disease"),
-    #                     none = NA, keep = T) %>%
-    #   mutate(hm_v1022___15 = ifelse(str_detect(hm_v1022, "Other"), "1", "0"),
-    #          hm_v1022_oth = ifelse(hm_v1022___15 == "1", hm_v1022, ""),
-    #          .before = hm_v1022) %>%
-    #   select(-hm_v1022) %>%
-    #   mutate(hm_v1023 = str_remove_all(hm_v1023, ","),
-    #          hm_v1023_oth = ifelse(str_detect(hm_v1023, "Other"), hm_v1023, ""),
-    #          .after = hm_v1023) %>%
-    #   mutate(hm_v1023 = case_when(hm_v1023 == "Insomnia" ~ 1,
-    #                               hm_v1023 == "Sleep apnea" ~ 2,
-    #                               str_detect(hm_v1023, "Other") ~ 555,
-    #                               hm_v1023 == "None of the above" ~ 999)) %>%
-    #   checkbox_function(variable = "hm_v1025",
-    #                     checkboxes = c("Heart Disease", "Heart Attack", "Liver disease", "Kidney disease",
-    #                                    "Vascular disease", "Asthma", "Lung disease"),
-    #                     none = "None of the above") %>%
-    #   rename(hm_v1025___999 = hm_v1025___0) %>%
-    #   checkbox_function(variable = "hm_v1029",
-    #                     checkboxes = c("Depression", "Bipolar disorder", "Post-Traumatic Stress",
-    #                                    "General anxiety", "Panic attacks", "Phobia", "Schizophrenia",
-    #                                    "Substance use disorder", "Eating disorder"),
-    #                     none = NA, keep = T) %>%
-    #   mutate(hm_v1029___555 = ifelse(str_detect(hm_v1029, "Other"), "1", "0"),
-    #          hm_v1029_oth = ifelse(hm_v1029___555 == "1", 
-    #                                str_replace(hm_v1029, ".*Other \\(please specify\\):,", ""),
-    #                                ""),
-    #          .before = hm_v1029) %>%
-    #   select(-hm_v1029) %>%
-    #   mutate(hm_v1041 = case_when(hm_v1041 == "1 No Stress" ~ "1",
-    #                               hm_v1041 == "3 â\u0080\u0093 Moderate Stress" ~ "3",
-    #                               hm_v1041 == "3 Moderate Stress" ~ "3",
-    #                               hm_v1041 == "5 Great Deal of Stress" ~ "5",
-    #                               TRUE ~ hm_v1041),
-    #          hm_v1042 = ifelse(hm_v1042 == "I donât know", "I don't know", hm_v1042)) %>%
-    #   # Medication assignments (hm_v1055)
-    #   mutate(# Remove end commas and "No medications"
-    #     hm_v1055 = str_remove(hm_v1055, ",$"),
-    #     hm_v1055 = ifelse(hm_v1055 %in% c("No medications", ""), "", hm_v1055),
-    #     # Remove spaces around commas
-    #     hm_v1055 = str_remove_all(hm_v1055, "[:space:](?=,)|(?<=,)[:space:]"),
-    #     # First medication assignment
-    #     hm_v1055_1 = str_remove(hm_v1055, ",.*"),
-    #     hm_v1055 = str_remove(hm_v1055, "^.*?,"),
-    #     hm_v1055 = ifelse(hm_v1055 == hm_v1055_1, "", hm_v1055),
-    #     # Second medication assignment
-    #     hm_v1055_2 = str_remove(hm_v1055, ",.*"),
-    #     hm_v1055 = str_remove(hm_v1055, "^.*?,"),
-    #     hm_v1055 = ifelse(hm_v1055 == hm_v1055_2, "", hm_v1055),
-    #     # Third medication assignment
-    #     hm_v1055_3 = str_remove(hm_v1055, ",.*"),
-    #     hm_v1055 = str_remove(hm_v1055, "^.*?,"),
-    #     hm_v1055 = ifelse(hm_v1055 == hm_v1055_3, "", hm_v1055),
-    #     # Fourth medication assignment
-    #     hm_v1055_4 = str_remove(hm_v1055, ",.*"),
-    #     .after = hm_v1055) %>%
-    #   select(-hm_v1055) %>%
-    #   rename(hm_v1055 = hm_v1055_1) %>%
-    #   # Dose assignments (hm_v1056)
-    #   mutate(# Remove end commas and "Not missing"
-    #     hm_v1056 = str_remove(hm_v1056, ",$"),
-    #     hm_v1056 = ifelse(hm_v1056 %in% c("Not missing", ""), "", hm_v1056),
-    #     # Remove spaces around commas
-    #     hm_v1056 = str_remove_all(hm_v1056, "[:space:](?=,)|(?<=,)[:space:]"),
-    #     # First medication assignment
-    #     hm_v1056_1 = str_remove(hm_v1056, ",.*"),
-    #     hm_v1056 = str_remove(hm_v1056, "^.*?,"),
-    #     hm_v1056 = ifelse(hm_v1056 == hm_v1056_1, "", hm_v1056),
-    #     # Second medication assignment
-    #     hm_v1056_2 = str_remove(hm_v1056, ",.*"),
-    #     hm_v1056 = str_remove(hm_v1056, "^.*?,"),
-    #     hm_v1056 = ifelse(hm_v1056 == hm_v1056_2, "", hm_v1056),
-    #     # Third medication assignment
-    #     hm_v1056_3 = str_remove(hm_v1056, ",.*"),
-    #     hm_v1056 = str_remove(hm_v1056, "^.*?,"),
-    #     hm_v1056 = ifelse(hm_v1056 == hm_v1056_3, "", hm_v1056),
-    #     # Fourth medication assignment
-    #     hm_v1056_4 = str_remove(hm_v1056, ",.*"),
-    #     .after = hm_v1056) %>%
-    #   select(-hm_v1056) %>% rename(hm_v1056 = hm_v1056_1) %>%
-    #   # Is this medication prescribed by a physician? (Survey data only had one entry)
-    #   mutate(hm_v1057_2 = NA,
-    #          hm_v1057_3 = NA,
-    #          hm_v1057_4 = NA,
-    #          .after = hm_v1057) %>%
-    #   # Length of medication assignments (hm_v1058)
-    #   mutate(# Remove end commas and "Not missing"
-    #     hm_v1058 = str_remove(hm_v1058, ",$"),
-    #     hm_v1058 = ifelse(hm_v1058 %in% c("Not missing", ""), "", hm_v1058),
-    #     # Remove spaces around commas
-    #     hm_v1058 = str_remove_all(hm_v1058, "[:space:](?=,)|(?<=,)[:space:]"),
-    #     # First medication assignment
-    #     hm_v1058_1 = str_remove(hm_v1058, ",.*"),
-    #     hm_v1058 = str_remove(hm_v1058, "^.*?,"),
-    #     hm_v1058 = ifelse(hm_v1058 == hm_v1058_1, "", hm_v1058),
-    #     # Second medication assignment
-    #     hm_v1058_2 = str_remove(hm_v1058, ",.*"),
-    #     hm_v1058 = str_remove(hm_v1058, "^.*?,"),
-    #     hm_v1058 = ifelse(hm_v1058 == hm_v1058_2, "", hm_v1058),
-    #     # Third medication assignment
-    #     hm_v1058_3 = str_remove(hm_v1058, ",.*"),
-    #     hm_v1058 = str_remove(hm_v1058, "^.*?,"),
-    #     hm_v1058 = ifelse(hm_v1058 == hm_v1058_3, "", hm_v1058),
-    #     # Fourth medication assignment
-    #     hm_v1058_4 = str_remove(hm_v1058, ",.*"),
-    #     .after = hm_v1058) %>%
-    #   select(-hm_v1058) %>% rename(hm_v1058 = hm_v1058_1) %>%
-    #   # Reason for taking medication assignments (hm_v1059)
-    #   mutate(# Remove end commas and "Not missing"
-    #     hm_v1059 = str_remove(hm_v1059, ",$"),
-    #     hm_v1059 = ifelse(hm_v1059 %in% c("Not missing", ""), "", hm_v1059),
-    #     # Remove spaces around commas
-    #     hm_v1059 = str_remove_all(hm_v1059, "[:space:](?=,)|(?<=,)[:space:]"),
-    #     # First medication assignment
-    #     hm_v1059_1 = str_remove(hm_v1059, ",.*"),
-    #     hm_v1059 = str_remove(hm_v1059, "^.*?,"),
-    #     hm_v1059 = ifelse(hm_v1059 == hm_v1059_1, "", hm_v1059),
-    #     # Second medication assignment
-    #     hm_v1059_2 = str_remove(hm_v1059, ",.*"),
-    #     hm_v1059 = str_remove(hm_v1059, "^.*?,"),
-    #     hm_v1059 = ifelse(hm_v1059 == hm_v1059_2, "", hm_v1059),
-    #     # Third medication assignment
-    #     hm_v1059_3 = str_remove(hm_v1059, ",.*"),
-    #     hm_v1059 = str_remove(hm_v1059, "^.*?,"),
-    #     hm_v1059 = ifelse(hm_v1059 == hm_v1059_3, "", hm_v1059),
-    #     # Fourth medication assignment
-    #     hm_v1059_4 = str_remove(hm_v1059, ",.*"),
-    #     .after = hm_v1059) %>%
-    #   select(-hm_v1059) %>% rename(hm_v1059 = hm_v1059_1) %>%
-    #   rename(healthmed_complete = hm_complete)
-    
-    # 15-Aug-2025: Expanded REDCap survey data to include up to 30 medication entries
-    # Format non-medication health medical entries
-    non_medication_health_medical <- redcap_files_list[["health_medical"]] %>%
-      select(-c(hm_v1055, hm_v1056, hm_v1057, hm_v1058, hm_v1059)) %>%
-      mutate(across(c(hm_v103:hm_v106, hm_v108, hm_v109, hm_v1012, hm_v1014, hm_v1016, hm_v1018,
-                      hm_v1021, hm_v1024, hm_v1026, hm_v1027, hm_v1028, hm_v1030:hm_v1032, hm_v1034,
-                      hm_v1036:hm_v1039, hm_v1042, hm_v1044, hm_v1046, hm_v1047, hm_v1050, hm_v1052, 
-                      hm_v1054),
-                    ~case_when(. == "Yes" ~ 1,
-                               . == "No" ~ 0,
-                               . == "I don't know" ~ 333,
-                               . == "Prefer not to answer" ~ 999)),
-             hm_v107 = case_when(hm_v107 == "No" ~ 0,
-                                 hm_v107 == "Hearing aid" ~ 1,
-                                 hm_v107 == "Cochlear implant" ~ 2),
-             hm_v1010 = case_when(hm_v1010 == "1 Not controlled" ~ 1,
-                                  hm_v1010 == "2" ~ 2,
-                                  hm_v1010 == "3 Somewhat controlled" ~ 3,
-                                  hm_v1010 == "4" ~ 4,
-                                  hm_v1010 == "5 Very well controlled" ~ 5),
-             hm_v1033 = case_when(hm_v1033 == "A. With medication" ~ 1,
-                                  hm_v1033 == "B. With diet/exercise or other non-pharmaceutical means" ~ 2,
-                                  hm_v1033 == "C. Both A and B" ~ 3)) %>%
-      checkbox_function(variable = "hm_v1017",
-                        checkboxes = c("Grand Mal", "Absence", "Myoclonic",
-                                       "Clonic", "Tonic", "Atonic", "Childhood febrile",
-                                       "I dont know"),
-                        none = NA, keep = T) %>%
-      mutate(hm_v1017___555 = ifelse(str_detect(hm_v1017, "Other"), "1", "0"),
-             hm_v1017_oth = ifelse(hm_v1017___555 == "1", hm_v1017, ""),
-             .before = hm_v1017) %>%
-      select(-hm_v1017) %>%
-      checkbox_function(variable = "hm_v1019",
-                        checkboxes = c("Migraines", "Tension", "Cluster", "Thunderclap",
-                                       "Post Head Trauma"),
-                        none = NA, keep = T) %>%
-      mutate(hm_v1019___555 = ifelse(str_detect(hm_v1019, "Other"), "1", "0"),
-             hm_v1019_oth = ifelse(hm_v1019___555 == "1", hm_v1019, ""),
-             .before = hm_v1019) %>%
-      select(-hm_v1019) %>%
-      checkbox_function(variable = "hm_v1020",
-                        checkboxes = c("Family physician", "Neurologist", "Self"),
-                        none = NA, keep = T) %>%
-      mutate(hm_v1020___4 = ifelse(str_detect(hm_v1020, "Other"), "1", "0"),
-             hm_v1020_oth = ifelse(hm_v1020___4 == "1", hm_v1020, ""),
-             .before = hm_v1020) %>%
-      select(-hm_v1020) %>%
-      checkbox_function(variable = "hm_v1022",
-                        checkboxes = c("Ataxia", "Cerebral palsy", "Chorea", "Huntingtons disease", "Tardive dyskinesia",
-                                       "Dystonia", "Essential tremor", "Parkinsons disease", "Restless legs syndrome",
-                                       "Spasms", "Stereotypy", "Tic disorders", "Tourettes syndrome", "Wilsons disease"),
-                        none = NA, keep = T) %>%
-      mutate(hm_v1022___15 = ifelse(str_detect(hm_v1022, "Other"), "1", "0"),
-             hm_v1022_oth = ifelse(hm_v1022___15 == "1", hm_v1022, ""),
-             .before = hm_v1022) %>%
-      select(-hm_v1022) %>%
-      mutate(hm_v1023 = str_remove_all(hm_v1023, ","),
-             hm_v1023_oth = ifelse(str_detect(hm_v1023, "Other"), hm_v1023, ""),
-             .after = hm_v1023) %>%
-      mutate(hm_v1023 = case_when(hm_v1023 == "Insomnia" ~ 1,
-                                  hm_v1023 == "Sleep apnea" ~ 2,
-                                  str_detect(hm_v1023, "Other") ~ 555,
-                                  hm_v1023 == "None of the above" ~ 999)) %>%
-      checkbox_function(variable = "hm_v1025",
-                        checkboxes = c("Heart Disease", "Heart Attack", "Liver disease", "Kidney disease",
-                                       "Vascular disease", "Asthma", "Lung disease"),
-                        none = "None of the above") %>%
-      rename(hm_v1025___999 = hm_v1025___0) %>%
-      checkbox_function(variable = "hm_v1029",
-                        checkboxes = c("Depression", "Bipolar disorder", "Post-Traumatic Stress",
-                                       "General anxiety", "Panic attacks", "Phobia", "Schizophrenia",
-                                       "Substance use disorder", "Eating disorder"),
-                        none = NA, keep = T) %>%
-      mutate(hm_v1029___555 = ifelse(str_detect(hm_v1029, "Other"), "1", "0"),
-             hm_v1029_oth = ifelse(hm_v1029___555 == "1", 
-                                   str_replace(hm_v1029, ".*Other \\(please specify\\):,", ""),
-                                   ""),
-             .before = hm_v1029) %>%
-      select(-hm_v1029) %>%
-      mutate(hm_v1041 = case_when(hm_v1041 == "1 No Stress" ~ "1",
-                                  hm_v1041 == "3 â\u0080\u0093 Moderate Stress" ~ "3",
-                                  hm_v1041 == "3 Moderate Stress" ~ "3",
-                                  hm_v1041 == "5 Great Deal of Stress" ~ "5",
-                                  TRUE ~ hm_v1041),
-             hm_v1042 = ifelse(hm_v1042 == "I donât know", "I don't know", hm_v1042)) 
-    
-    # Set up REDCap medication format:
-    redcap_hm_medications_entries <- c(
-      # Medication 
-      paste0("hm_v1055_", 1:30),
-      # Daily dosages
-      paste0("hm_v1056_", 1:30),
-      # Prescribed by physician?
-      paste0("hm_v1057_", 1:30),
-      # Length of medication assignment
-      paste0("hm_v1058_", 1:30),
-      # Reason for taking medication
-      paste0("hm_v1059_", 1:30)
-    ) %>%
-      tibble() %>% rename(redcap_variable_name = 1) %>%
-      mutate(hml_id = picked_id,
-             participant_entry = "")
-    
-    # Did participant list any medications?
-    if(!is.na(redcap_files_list[["health_medical"]]$hm_v1055)){
-      if(redcap_files_list[["health_medical"]]$hm_v1055 != "No medications"){
-        # Get number of medications
-        number_medications <- length(str_split_1(redcap_files_list[["health_medical"]]$hm_v1055, ","))
-        
-        # Format medication entries from participant
-        mindcrowd_med_data <- redcap_files_list[["health_medical"]] %>%
-          select(hml_id, hm_v1055, hm_v1056, hm_v1057, hm_v1058, hm_v1059) %>%
-          mutate(hm_v1057 = str_replace_all(hm_v1057, "Yes", "1") %>% str_replace_all("No", "0")) %>%
-          rowwise() %>%
-          mutate(
-            # split into lists
-            across(starts_with("hm_v"), ~ str_split(., ",")),
-            # truncate all to that length
-            across(starts_with("hm_v"), ~ .x[seq_len(number_medications)] %>% paste(collapse = ","))
-          ) %>%
-          separate_longer_delim(c(hm_v1055, hm_v1056, hm_v1057, hm_v1058, hm_v1059), 
-                                delim = ",") %>%
-          mutate(across(everything(), ~ifelse(. == "NA", "", .)))
-        
-        # Max 30 entries:
-        if(number_medications > 30) mindcrowd_med_data <- mindcrowd_med_data[1:30,]
-        
-        # Fill in separate medication entries
-        for(entry in 1:number_medications){
-          # Medication
-          redcap_hm_medications_entries$participant_entry[
-            which(redcap_hm_medications_entries$redcap_variable_name == paste0("hm_v1055_", entry))] <- mindcrowd_med_data$hm_v1055[entry]
-          
-          # Daily dosage
-          redcap_hm_medications_entries$participant_entry[
-            which(redcap_hm_medications_entries$redcap_variable_name == paste0("hm_v1056_", entry))] <- mindcrowd_med_data$hm_v1056[entry]
-          
-          # Prescribed by physician?
-          redcap_hm_medications_entries$participant_entry[
-            which(redcap_hm_medications_entries$redcap_variable_name == paste0("hm_v1057_", entry))] <- mindcrowd_med_data$hm_v1057[entry]
-          
-          # Length of medication assignment
-          redcap_hm_medications_entries$participant_entry[
-            which(redcap_hm_medications_entries$redcap_variable_name == paste0("hm_v1058_", entry))] <- mindcrowd_med_data$hm_v1058[entry]
-          
-          # Reason for taking medication
-          redcap_hm_medications_entries$participant_entry[
-            which(redcap_hm_medications_entries$redcap_variable_name == paste0("hm_v1059_", entry))] <- mindcrowd_med_data$hm_v1059[entry]
-        }
-      } 
-    }
-    
-    medication_health_medical <- redcap_hm_medications_entries %>%
-      mutate(redcap_variable_name = str_remove(redcap_variable_name, "_1$")) %>%
-      pivot_wider(id_cols = hml_id,
-                  names_from = redcap_variable_name,
-                  values_from = participant_entry)
-    
-    # Join non-medication and medication data and finalize
-    redcap_files_list[["health_medical"]] <- left_join(non_medication_health_medical, medication_health_medical, by = "hml_id") %>%
-      mutate(healthmed_complete = hm_complete) %>%
-      select(-hm_complete)
-    
     # SES
     
     redcap_files_list[["ses"]] <- redcap_files_list[["ses"]] %>%
@@ -649,7 +653,6 @@ redcap_formatting <- function(redcap_files_list, visit_number, picked_id){
            across(everything(), ~ifelse(is.na(.), "", .))) %>%
     mutate(redcap_event_name = ifelse(visit_number == 1, "hml_survey_tracker_arm_1",
                                       "hml_survey_tracker_arm_1b"), .after = record_id)
-    # mutate(redcap_event_name = "hml_survey_tracker_arm_1", .after = record_id)
   
   return(redcap_data)
 }
