@@ -425,16 +425,31 @@ redcap_formatting <- function(redcap_files_list, visit_number, picked_id){
   
   # QPAR ------
   
-  redcap_files_list[["qpar"]] <- redcap_files_list[["qpar"]] %>%
-    mutate(across(qpar_v101:qpar_v108, 
-                  ~case_when(. == "0 Days" ~ "0",
-                             . == "1-2 Days" ~ "1",
-                             . == "3-4 Days" ~ "2",
-                             . == "5-7 Days" ~ "3")),
-           across(qpar_v109:qpar_v1016, 
-                  ~case_when(. == "Less than 1 hour" ~ "0",
-                             . == "1-2 hours" ~ "1",
-                             . == "More than 2 hours" ~ "2")))
+  if(ncol(redcap_files_list[["qpar"]]) == 24){
+    redcap_files_list[["qpar"]] <- redcap_files_list[["qpar"]] %>%
+      mutate(across(qpar_v101:qpar_v108, 
+                    ~case_when(. == "0 Days" ~ "0",
+                               . == "1-2 Days" ~ "1",
+                               . == "3-4 Days" ~ "2",
+                               . == "5-7 Days" ~ "3")),
+             across(qpar_v109:qpar_v1016, 
+                    ~case_when(. == "Less than 1 hour" ~ "0",
+                               . == "1-2 hours" ~ "1",
+                               . == "More than 2 hours" ~ "2")))
+  }else{
+    redcap_files_list[["qpar"]] <- redcap_files_list[["qpar"]] %>%
+      mutate(across(c(qpar_v101:qpar_v108, qpar_v1017, qpar_v1019), 
+                    ~case_when(. == "0 Days" ~ "0",
+                               . == "1-2 Days" ~ "1",
+                               . == "3-4 Days" ~ "2",
+                               . == "5-7 Days" ~ "3")),
+             across(qpar_v109:qpar_v1016, qpar_v1018, qpar_v1020, 
+                    ~case_when(. == "Less than 1 hour" ~ "0",
+                               . == "1-2 hours" ~ "1",
+                               . == "More than 2 hours" ~ "2")))
+  }
+  
+  
   
   # Sleep ------
   

@@ -294,6 +294,25 @@ survey_logic_branching <- function(files_list){
         "Not missing",
         files_list[["qpar"]][i, paste0("QPAR_v1.0.", col+8)])
     }
+    
+    created_date_survey <- as.Date(files_list[["qpar"]][i, "created_date_survey"])
+    date_extra_vars_added <- as.Date("2025-03-31")
+    
+    if(created_date_survey < date_extra_vars_added){
+      files_list[["qpar"]][i, "QPAR_v1.0.17"] <- "Not missing"
+      files_list[["qpar"]][i, "QPAR_v1.0.18"] <- "Not missing"
+      files_list[["qpar"]][i, "QPAR_v1.0.19"] <- "Not missing"
+      files_list[["qpar"]][i, "QPAR_v1.0.20"] <- "Not missing"
+    }else{
+      files_list[["qpar"]][i, "QPAR_v1.0.18"] <- ifelse(
+        files_list[["qpar"]][i, "QPAR_v1.0.17"] == "0 Days", 
+        "Not missing",
+        files_list[["qpar"]][i, "QPAR_v1.0.18"])
+      files_list[["qpar"]][i, "QPAR_v1.0.20"] <- ifelse(
+        files_list[["qpar"]][i, "QPAR_v1.0.19"] == "0 Days", 
+        "Not missing",
+        files_list[["qpar"]][i, "QPAR_v1.0.20"])
+    }
   }
   
   # SES --------------

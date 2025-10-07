@@ -63,6 +63,7 @@ if(production){
 # Load survey processing functions ----------
 source("survey_logic_branching.R")
 source("survey_redcap_formatting.R")
+source("survey_redcap_formatting_backwards.R")
 
 load("survey_data_dictionary.Rdata")
 
@@ -174,7 +175,6 @@ raw_files_list_edit <- lapply(raw_files_list, function(x){
     new_x <- new_x[-which(colnames(new_x) %in% c("Last Modified Date", "Not Listed", "Not.Listed", "Last.Modified.Date"))]
   }
   
-  
   new_x
 })
 
@@ -249,11 +249,33 @@ files_list <- lapply(raw_files_list_edit, function(x){
 
 ```
 
+```{r load redcap survey data}
+
+redcap_survey_names <- c("adl", "anxiety", "brain_disease", "covid", "diet", "family_history", "health_medical", "qpar", "ses", "sleep", "social_stressor", "social_support", "perceived_stress", "subjective_english", "swls")
+
+redcap_import_files_list <- lapply(redcap_survey_names, 
+                         function(x){
+                           # Get all surveys only for people with HML IDs
+                           new_x <- dbReadTable(con, paste0("p2_redcap_", x))
+                         }
+)
+
+names(redcap_import_files_list) <- survey_names
+
+formatted_redcap_import_files_list <- redcap_formatting_backwards(redcap_import_files_list)
+
+```
+
 ```{r survey completion calculations}
 
 complete_files_list <- lapply(files_list, function(x){
   new_x <- x %>%
     select(hml_id, site, contains("survey_visit_number"), contains("_completed"))
+})
+
+complete_redcap_files_list <- lapply(formatted_redcap_import_files_list, function(x){
+  new_x <- x %>%
+    select(hml_id, visit, ends_with("_complete"))
 })
 
 ```
@@ -295,6 +317,24 @@ for(i in 2:length(files_list)){
                                   by = c("hml_id", "site", "survey_visit_number"))%>%
     filter(!is.na(site) & site != "")
 }
+
+overall_redcap_completion <- reduce(complete_redcap_files_list, full_join, by = c("hml_id", "visit")) %>%
+  pivot_longer(cols = -c(hml_id, visit),
+               names_to = "Survey",
+               values_to = "completion") %>%
+  mutate(completion = ifelse(completion == 1, "Complete", "Not Complete"),
+         Survey = str_remove(Survey, "_complete"),
+         Survey = case_when(Survey == "anxiety" ~ "Anxiety",
+                            Survey == "brain_disease" ~ "Brain Disease",
+                            Survey == "covid" ~ "Covid-19",
+                            Survey == "diet" ~ "Diet",
+                            Survey == "healthmed" ~ "Health Medical",
+                            Survey == "sleep" ~ "Sleep",
+                            Survey == "socstress" ~ "Social Stressor",
+                            Survey == "socsupp" ~ "Social Support",
+                            Survey == "stress" ~ "Perceived Stress",
+                            Survey == "subeng" ~ "Subjective English",
+                            TRUE ~ str_to_upper(Survey)))
 
 # Create overall completed/attempted table for download
 overall_attempted_all_participants <- overall_attempted_time %>%
@@ -348,7 +388,49 @@ overall_attempted_all_participants <- overall_attempted_time %>%
               names_glue = "{Survey}_{.value}",
               names_vary = "slowest")
 
+
+# Create the data for the second download button (WITH REDCap status)
+# Make REDCap status wide: one column per survey
+redcap_status_wide <- overall_redcap_completion %>%
+  rename(survey_visit_number = visit,
+         redcap_status = completion) %>%
+  pivot_wider(
+    id_cols    = c(hml_id, survey_visit_number),
+    names_from = Survey,
+    values_from = redcap_status,
+    names_glue = "{Survey}_redcap_status"
+  )
+
+# Convert survey_visit_number into integer for merging
+redcap_status_wide <- redcap_status_wide %>%
+  mutate(survey_visit_number = as.integer(survey_visit_number))
+
+overall_attempted_all_participants <- overall_attempted_all_participants %>%
+  mutate(survey_visit_number = as.integer(survey_visit_number))
+
+# Add those columns to existing wide file
+overall_attempted_all_participants_with_redcap <- overall_attempted_all_participants %>%
+  left_join(redcap_status_wide, by = c("hml_id", "survey_visit_number")) %>%
+  {
+    id_cols <- c("hml_id","site","survey_visit_number")
+    
+    # Sort variables and group by survey 
+    survey_order <- names(overall_attempted_all_participants)
+    survey_order <- survey_order[grepl("_timestamp$", survey_order)]
+    survey_order <- sub("_timestamp$", "", survey_order)
+    
+    measures <- c("timestamp","game_status","redcap_status")
+    desired  <- c(
+      id_cols,
+      unlist(lapply(survey_order, function(s) paste0(s, "_", measures)))
+    )
+    
+    select(., any_of(desired))
+  }
+
+
 ```
+
 
 ```{r functions for plots and tables}
 
@@ -469,7 +551,7 @@ table_function <- function(picked_site = "All", survey = "All", picked_id = "All
       }
     }
   } else { # Looking at specific sites
-    if (survey == "All") {
+    if (survey == "All") { # Look at all surveys for specific participant
       overall_attempted_time %>%
         filter(hml_id == picked_id, survey_visit_number == visit) %>%
         pivot_longer(cols = -c(hml_id, site, survey_visit_number),
@@ -517,12 +599,32 @@ table_function <- function(picked_site = "All", survey = "All", picked_id = "All
           Completed = ifelse(`Date Attempted` == "Not Attempted", "Not Attempted", Completed),
           `Date Attempted` = ifelse(`Date Attempted` == "Not Attempted", "", `Date Attempted`)
         ) %>%
-        kable(col.names = c("Survey", "Date Attempted", "Completion Status")) %>%
+        left_join(
+          overall_redcap_completion %>%
+            rename(redcap_visit = visit) %>%
+            filter(hml_id == picked_id, redcap_visit == visit) %>%
+            select(Survey, completion),
+          by = "Survey"
+        ) %>%
+        mutate(completion = ifelse(Completed == "Not Attempted", "", completion),
+               completion = ifelse(is.na(completion), "", completion)) %>%
+        kable(col.names = c("Survey", "Date Attempted", "Completion Status", "REDCap Completion Status")) %>%
         kable_styling(full_width = F)
+      
     } else { # Look at specific answers for a participant
       if (visit == 2 & survey %in% remove_from_second_visit) {
         print("Survey not required for second visit.")
       } else {
+        # Format REDCap responses to attach to MC survey responses
+        redcap_table_dat <- formatted_redcap_import_files_list[[survey]] %>%
+          rename(survey_visit_number = visit) %>%
+          filter(hml_id == picked_id, survey_visit_number == visit) %>%
+          select(-c(hml_id, record_id, participant_id_parent, survey_visit_number, 
+                    ends_with("_complete"), ends_with("_status"), ends_with("_timestamp"))) %>%
+          mutate_all(as.character) %>%
+          pivot_longer(cols = everything(), names_to = "redcap_item", values_to = "REDCap Response")
+        
+        # Pull MC survey responses and attach to REDCap responses
         files_list[[survey]] %>%
           filter(hml_id == picked_id, survey_visit_number == visit) %>%
           select(-c(hml_id, record_id, site, survey_visit_number, ends_with("_timestamp"), ends_with("_completed"))) %>%
@@ -534,6 +636,13 @@ table_function <- function(picked_site = "All", survey = "All", picked_id = "All
           left_join(survey_data_dictionary %>% select(name = item, question), by = c("Item" = "name")) %>%
           select(Item, Text = question, Response) %>%
           distinct() %>%
+          mutate(redcap_item = str_to_lower(Item) %>%
+                   str_remove_all("\\.")) %>%
+          left_join(redcap_table_dat, by = "redcap_item") %>%
+          mutate(`REDCap Response` = case_when(is.na(`REDCap Response`) & Response == "Missing" ~  "Missing",
+                                               is.na(`REDCap Response`) & Response == "Not Applicable" ~  "Not Applicable",
+                                               TRUE ~ `REDCap Response`)) %>%
+          select(-redcap_item) %>%
           kable %>%
           kable_styling(full_width = F)
       }
@@ -598,6 +707,17 @@ output$downloadOverallData <- downloadHandler(
     write.csv(overall_attempted_all_participants, file, row.names = FALSE)
   }
 )
+
+# Download handler for overall data with redcap status:
+output$downloadOverallDataWithRedcap <- downloadHandler(
+  filename = function(){
+    paste0("survey_data_completion_with_redcap_", format(Sys.Date(), "%y%m%d"), ".csv")
+  },
+  content = function(file){
+    write.csv(overall_attempted_all_participants_with_redcap, file, row.names = FALSE)
+  }
+)
+
 
 # Download handlers for participants:
 
@@ -699,9 +819,21 @@ survey <- reactive({input$surveyPick})
 
 ```{r download overall survey summary}
 
-renderUI({downloadButton("downloadOverallData", "Download Overall Completion Data",
-                         style="white-space: normal;")})
+renderUI({
+  downloadButton("downloadOverallData", "Download Overall Completion Data",
+                 style="white-space: normal;")
+})
 
+
+```
+
+<br>
+
+```{r}
+renderUI({
+  downloadButton("downloadOverallDataWithRedcap", "Download Overall Completion Data with REDCap Statuses",
+                 style="white-space: normal;")
+})
 ```
 
 
