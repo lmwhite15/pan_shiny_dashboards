@@ -21,61 +21,148 @@ editor_options:
 </style>
 ```
 
+```{r production}
+# Is the app ready to be published to RStudio Connect?
+production <- FALSE
+
+# 2025-10-11: Terrill is owner of app in viz.datascience.arizona.edu so need 
+            # to publish through his account
+```
+
 ```{r setup, include=FALSE}
 
-library(tidyverse)
-library(shiny)
-library(flexdashboard)
-# devtools::install_github(repo="haozhu233/kableExtra", ref="a6af5c0")
-# Need to use the above to collapse rows properly
-library(kableExtra)
-library(openxlsx)
+# Required libraries
+library(shiny) # Shiny app package
+library(flexdashboard) # Shiny app package
+library(DBI) # Connecting to database
+library(tidyverse) # Data wrangling
+library(kableExtra) # Creates nice tables
+library(RCurl) # Connecting to Box Health to generate new REDCap ID
 
-# section to connect to Google Drive
-library(googledrive)
-# file with info for service account
-drive_auth(path = "pan-mindcrowd-uploads-d9b7ecb93e53.json")
-# Option to silence the messages coming from the Google Drive library
-options(googledrive_quiet = TRUE)
+# openxlsx::read.xlsx is used in manual ID generation function
 
-# # Section to connect to Box Drive
-# library(jsonlite)
-# library(RCurl)
-# 
-# json_data <- fromJSON("keys.json")
-# logininfo <- json_data$userpwd
-# hmlfile <- "ftps://ftp.box.com/[UA%20BOX%20Health]%20MindCrowd%20Inbound/HML_ID_Assignment/deidentified_id_data.csv"
-
-production <- TRUE
+# Function that logs user input and saves it in PAN db
+log_function <- function(site, participant_id, hml_id, action){
+    # Send info to db id app log
+    log_table <- data.frame(datetime = Sys.time(),
+                            site = site,
+                            participant_id = participant_id,
+                            hml_id = hml_id,
+                            action = action,
+                            production = production)
+    dbWriteTable(con, "dm_hml_id_app_log", log_table, append = TRUE)
+}
 
 ```
 
 ```{r load data}
 
+# Connect to PAN Database (RStudio Connect has a different database connection)
+# And get HML ID generation data
 # If not in production, will download files from local folder
 if(production){
-  with_drive_quiet(
-    drive_download(as_id("https://drive.google.com/file/d/1NWUkcoIRuHBlw1h6_LWRlNpQSTcNa3fr"),
-                   overwrite = TRUE)
+  con <- dbConnect(RPostgres::Postgres(),
+                   user = Sys.getenv("user")
+                   , password = Sys.getenv("password")
+                   , dbname = Sys.getenv("dbname")
+                   , host = Sys.getenv("nlb")
+                   , port = Sys.getenv("port")
   )
+  
+  id_dat <- dbReadTable(con, "dm_hml_id_app_data")
+  
+}else{
+  con <- dbConnect(RPostgres::Postgres(),
+                   user = Sys.getenv("user")
+                   , password = Sys.getenv("password")
+                   , dbname = Sys.getenv("dbname")
+                   , host = Sys.getenv("host")
+                   , port = Sys.getenv("port")
+                   , sslrootcert = 'global-bundle.pem'
+  )
+  
+  id_dat <- read.csv("test_hml_id_app_data.csv")
 }
 
-load_data <- readRDS("generate_hml_id_dat.Rds")
+# Get screened participants from MindCrowd:
+screened_dat <- dbReadTable(con, "dm_screened_participants") %>%
+  # Create age groups and select variables needed for app
+  mutate(age_group = case_when(age %in% 50:59 ~ "50-59",
+                               age %in% 60:69 ~ "60-69",
+                               age %in% 70:79 ~ "70-79")) %>%
+  select(participant_id = participant_id_parent, sex, race, hispanic_latino, site, age_group, memory_rank) %>%
+  # Make sure there aren't any duplicate IDs between sites
+  distinct(participant_id, .keep_all = TRUE) %>%
+  # Create variables needed to attach these IDs to the HML ID info dataframe
+  mutate(hml_id = NA, hml_id_created_date = NA, hml_id_undo = NA, .after = participant_id) %>%
+  mutate(across(everything(), ~ifelse(. == "", NA, .)))
 
-dat <- load_data$dat
-all_dat <- load_data$all_dat
+# Add screened data to saved IDs to create general dataset for use in the app:
+dat <- screened_dat %>%
+  # Remove any participant_ids that already have HML IDs
+  filter(!participant_id %in% id_dat$participant_id) %>%
+  rbind(id_dat) %>%
+  # Make sure there is only one row per participant in the data
+  group_by(participant_id) %>% arrange(hml_id) %>% slice(1) %>% ungroup() %>%
+  distinct(participant_id, .keep_all = TRUE)
 
 ```
 
 ```{r save data}
 
-save_data <- function(production, deidentified_id_dat, all_dat){
-  saveRDS(list(dat = deidentified_id_dat,
-                 all_dat = all_dat),
-            file = "generate_hml_id_dat.Rds")
-  
-  # If in production then save in Drive
-  if(production){drive_put("generate_hml_id_dat.Rds", path=drive_find(pattern="HML Data", corpus="allDrives"))}
+save_data <- function(production, new_dat){
+  # Display progress bar while saving in progress
+  withProgress(message = "Saving... Please Wait", {
+    # Save data to database ---------------
+    dbWriteTable(con, "dm_hml_id_app_data", new_dat, overwrite = TRUE)
+    
+    # Get any HML IDs that need REDCap IDs generated
+    hml_id_files <- dbReadTable(con, "redcap_id_assignment")
+    
+    updated_ids <- new_dat %>%
+      filter(!is.na(hml_id),
+             !hml_id %in% hml_id_files$hml_id)
+    
+    if(!production){
+      # If in test mode, save new assignment to local csv
+      write.csv(new_dat, "test_hml_id_app_data.csv", row.names = FALSE)
+      
+      # Test saving new HML ID to REDCap assignment folder:
+      if(nrow(updated_ids) > 0) write.csv(updated_ids, file = "test_redcap_id_assignment.csv", row.names = FALSE)
+    }
+    
+    if(production){
+      # Write new hml ids to Box for REDCap assignment ------------
+      # Define Box FTPS details
+      # URL encode the path
+      encoded_path <- URLencode("[UA BOX Health] MindCrowd Inbound/HML_ID_Assignment/")
+      
+      # Define the FTPS base URL
+      ftps_base_url <- "ftps://ftp.box.com/"
+      
+      # Combine the base URL with the encoded path
+      ftps_url <- paste0(ftps_base_url, encoded_path)
+      userpwd <- Sys.getenv("FTP_PASSWORD")
+      
+      # Define the file path on your local system (file to save to HML ID assignment folder)
+      local_file <- "hml_id_data.csv"
+      output_file_path <- file.path(getwd(), local_file)
+      
+      # If there are new IDs then upload list to Box for REDCap ID generation
+      if(nrow(updated_ids) > 0){
+        write.csv(updated_ids, file = output_file_path,
+                  row.names = F)
+        # Upload the file
+        ftpUpload(
+          what = output_file_path,
+          to = paste0(ftps_url, basename(output_file_path)),
+          userpwd = userpwd,
+          verbose = TRUE
+        )
+      }
+    }
+    
+  })
   
   # Pop up status message and page reload
   shinyalert::shinyalert('Saved', callbackJS = "function() {location.reload()}")
@@ -85,91 +172,62 @@ save_data <- function(production, deidentified_id_dat, all_dat){
 
 ```{r create ID server}
 
-# Filter IDs by input area areaPick ------
+# Filter IDs by input site sitePick ------
 id_choices <- reactive(
-  filter(dat, area == input$areaPick, !is.na(participant_id))
+  filter(dat, site == input$sitePick, !is.na(participant_id))
 )
 
 # Filter data by selected ID idPick -------
 picked_id_data <- reactive(
-  filter(dat, participant_id == input$idPick & area == input$areaPick)
+  filter(dat, participant_id == input$idPick & site == input$sitePick)
 )
 
 # Create new ID and add to dataset for confirmation -------
 new_data <- reactive({
   req(input$newId)
   
+  # Check if ID has already been created for participant (hml id undo)
   if(!is.na(dat$hml_id_undo[which(dat$participant_id == (input$idPick))])){
-    new_hml_id <- dat$hml_id_undo[which(dat$participant_id == (input$idPick))]
+    
+    undone_hml_id <- id_dat$hml_id_undo[which(id_dat$participant_id == (input$idPick))]
+    
+    id_dat$hml_id[which(id_dat$participant_id == (input$idPick))] <- undone_hml_id
+    
+    return(id_dat)
+    
   }else{
-    existing_ids <- as.numeric(str_sub(c(dat$hml_id, dat$hml_id_undo), start = 4))
+    
+    existing_ids <- as.numeric(str_sub(c(id_dat$hml_id, id_dat$hml_id_undo), start = 4))
     
     existing_ids <- existing_ids[which(!is.na(existing_ids))]
     
     new_id <- max(existing_ids) + 1
     
     new_hml_id <- paste0("HML", str_pad(new_id, 4, pad = 0))
+    
+    dat$hml_id[which(dat$participant_id == (input$idPick))] <- new_hml_id
+    dat$hml_id_created_date[which(dat$participant_id == (input$idPick))] <- as.character(format(Sys.Date(), "%Y-%m-%d"))
+    
+    # Add to ID data
+    return(rbind(id_dat, dat[which(dat$participant_id == (input$idPick)),]))
+    
   }
   
-  dat$hml_id[which(dat$participant_id == (input$idPick))] <- new_hml_id
-  dat$hml_id_created_date[which(dat$participant_id == (input$idPick))] <- as.character(format(Sys.Date(), "%Y-%m-%d"))
-  
-  dat
 })
 
-# Save new ID data to Drive ------------
+# Save new ID data to database and Box ------------
 
 downloadNewData <- observe({
   if(isTruthy(input$saveId)){
     
-    new_download <- new_data() %>%
-      # Get actual participant_id_parent
-      left_join(select(all_dat, participant_id_parent, alternative_id), 
-                by = c("participant_id" = "alternative_id")) %>%
-      mutate(participant_id = participant_id_parent) %>%
-      select(-participant_id_parent) %>%
-      distinct()
+    # Write to log
+    log_function(site = input$sitePick,
+                 participant_id = input$idPick,
+                 hml_id = new_data()$hml_id[which(new_data()$participant_id == input$idPick)],
+                 action = "New ID")
     
-    # Update the all screening data so we don't overwrite any IDs
-    all_dat <- all_dat %>%
-      left_join(new_download %>% select(participant_id_parent = participant_id, hml_id, hml_id_created_date),
-                by = "participant_id_parent") %>%
-      mutate(hml_id = coalesce(hml_id.x, hml_id.y),
-             hml_id_created_date = coalesce(hml_id_created_date.x, hml_id_created_date.y)) %>%
-      select(-c(hml_id.x, hml_id.y, 
-                hml_id_created_date.x, hml_id_created_date.y))
-    
-    # Save data
-    save_data(production, 
-              deidentified_id_dat = new_download, 
-              all_dat = all_dat)
-  }
-})
-
-```
-
-```{r undo ID server}
-
-# Filter IDs by input area areaPick and display assigned IDs -------
-id_choices_undo <- reactive(
-  filter(dat, area == input$areaPick, !is.na(hml_id))
-)
-
-# Add undone ID and save to Drive -----------
-downloadNewDataUndo <- observe({
-  if(isTruthy(input$saveIdUndo)){
-    new_dat <- dat
-    
-    new_dat$hml_id_undo[which(new_dat$hml_id == input$idPickUndo)] <- input$idPickUndo
-    new_dat$hml_id[which(new_dat$hml_id == input$idPickUndo)] <- NA
-    
-    # Update the all screening data so we don't overwrite any IDs
-    all_dat$hml_id[which(all_dat$hml_id == input$idPickUndo)] <- NA
-    
-    save_data(production,
-              deidentified_id_dat = new_dat,
-              hml_id_dat = filter(new_dat, !is.na(hml_id)) %>% select(-hml_id_undo),
-              all_dat = all_dat)
+    # Save HML ID data --------------------
+    save_data(production, new_dat = new_data())
   }
 })
 
@@ -182,52 +240,50 @@ id_data <- eventReactive(input$data_up, {
   req(input$data_up)
   
   id_data <- ifelse(tools::file_ext(input$data_up$datapath) == "csv",
-                    read.csv(input$data_up$datapath, col.names = FALSE),
-                    read.xlsx(input$data_up$datapath, colNames = FALSE))
+                    read.csv(input$data_up$datapath, header = FALSE),
+                    openxlsx::read.xlsx(input$data_up$datapath, colNames = FALSE))
 })
 
 # Add new HML IDs ------------
 new_id_data <- reactive({
   id_data <- data.frame(id_data())
   
-  # Detect variable name and remove row if present
-  if(!str_detect(id_data[1,1], "[0:9]")) id_data <- as.data.frame(id_data[-1,])
+  # # Detect if blank csv was uploaded and, if so, display error message 
+  # if(nrow(id_data) == 0) showNotification("Blank .csv uploaded.", type = "error")
   
-  id_data <- rename(id_data, "id" = 1)
+  # Detect variable name and remove row if present
+  if(!str_detect(id_data[1,1], "\\d")) id_data <- as.data.frame(id_data[-1,])
+  
+  id_data <- rename(id_data, "participant_id" = 1)
   
   # Check if ID already has HML
   
-  check_data <- left_join(id_data[1], all_dat, by = c("id" = "alternative_id")) %>%
-    # Assign participant_id_parent if not in data
-    mutate(participant_id_parent = ifelse(is.na(participant_id_parent), id, participant_id_parent))
+  check_data <- left_join(id_data[1], dat, by = "participant_id")
   
-  existing_ids <- as.numeric(str_sub(c(dat$hml_id, dat$hml_id_undo), start = 4))
+  # Get existing HML IDs
+  
+  existing_ids <- as.numeric(str_sub(c(id_dat$hml_id, id_dat$hml_id_undo), start = 4))
   existing_ids <- existing_ids[which(!is.na(existing_ids))]
+  
+  # Assign new IDs
   
   new_ids <- check_data %>%
     # Assign any IDs that were previously undone
     mutate(hml_id = ifelse(!is.na(hml_id_undo), hml_id_undo, hml_id)) %>%
-    select(-hml_id_undo) %>%
-    select(participant_id_parent, hml_id, hml_id_created_date) %>%
-    # Group any duplicated IDs
-    distinct(participant_id_parent, .keep_all = T) %>%
     # Assign new HML IDs
     arrange(!is.na(hml_id)) %>%
-    mutate(assigned = ifelse(!is.na(hml_id), "Already assigned HML ID", ""),
+    mutate(assigned = ifelse(!is.na(hml_id), "Previously assigned HML ID", ""),
            hml_id_created_date = ifelse(is.na(hml_id),
                                         as.character(format(Sys.Date(), "%Y-%m-%d")),
                                         hml_id_created_date),
            hml_id = ifelse(is.na(hml_id),
                            paste0("HML", str_pad(max(existing_ids) + row_number(), 4, pad = 0)),
-                           hml_id))
+                           hml_id)) %>%
+    # Add recruitment site
+    mutate(site = ifelse(assigned != "Previously assigned HML ID", input$site_up, site))
   
   # Add new HML IDs to submitted data list
-  new_id_dat <- check_data %>%
-    select(-starts_with("hml_id")) %>%
-    mutate(area = input$area_up) %>%
-    left_join(new_ids, by = "participant_id_parent")
-  
-  new_id_dat
+  new_ids
 
 })
 
@@ -237,27 +293,51 @@ downloadManualData <- observe({
   if(isTruthy(input$saveIdData)){
     new_id_dat <- new_id_data()
     
-    down_id_dat <- dat %>% 
+    new_dat <- id_dat %>% 
       # Remove any participants already in the deidentified_id_data
-      filter(!participant_id %in% new_id_dat$participant_id_parent) %>%
+      filter(!participant_id %in% new_id_dat$participant_id) %>%
       # Join new participants with HML IDs to deidentified_id_data
       rbind(new_id_dat %>%
-              rename(participant_id = participant_id_parent,
-                     memory_rank = task_group) %>%
-              select(-c(id, assigned)) %>%
+              select(-assigned) %>%
               mutate(hml_id_undo = NA))
     
-    # Update the all screening data so we don't overwrite any IDs
-    new_all_dat <- all_dat %>%
-      full_join(new_id_dat %>% select(participant_id_parent, hml_id, hml_id_created_date),
-                by = "participant_id_parent") %>%
-      mutate(hml_id = coalesce(hml_id.x, hml_id.y),
-             hml_id_created_date = coalesce(hml_id_created_date.x, hml_id_created_date.y)) %>%
-      select(-c(ends_with(".x"), ends_with(".y")))
+    # Write to log
+    log_function(site = input$site_up,
+                 participant_id = new_id_dat$participant_id, 
+                 hml_id = new_id_dat$hml_id,
+                 action = "Manual ID")
     
-    save_data(production,
-              deidentified_id_dat = down_id_dat,
-              all_dat = new_all_dat)
+    # Save data
+    save_data(production, new_dat)
+  }
+})
+
+```
+
+```{r undo ID server}
+
+# Filter IDs by input site sitePick and display assigned IDs -------
+id_choices_undo <- reactive(
+  filter(id_dat, site == input$sitePick) %>% arrange(desc(hml_id))
+)
+
+# Add undone ID and save to Drive -----------
+downloadNewDataUndo <- observe({
+  if(isTruthy(input$saveIdUndo)){
+    new_dat <- id_dat
+    
+    # Write to log
+    log_function(site = input$sitePick,
+                 participant_id = new_dat$participant_id[which(new_dat$hml_id == input$idPickUndo)], 
+                 hml_id = new_dat$hml_id[which(new_dat$hml_id == input$idPickUndo)],
+                 action = "Undo ID")
+    
+    # Undo HML ID assignment
+    new_dat$hml_id_undo[which(new_dat$hml_id == input$idPickUndo)] <- input$idPickUndo
+    new_dat$hml_id[which(new_dat$hml_id == input$idPickUndo)] <- NA
+    
+    save_data(production, new_dat)
+    
   }
 })
 
@@ -270,10 +350,10 @@ downloadManualData <- observe({
 
 <br>
 
-```{r select area}
+```{r select site}
 
-# Select recruitment area
-radioButtons("areaPick", label = "Please select the participant's recruitment area.",
+# Select recruitment site
+radioButtons("sitePick", label = "Please select the participant's recruitment site.",
             choices = c("Atlanta", "Baltimore", "Miami", "Tucson"))
 
 ```
@@ -288,7 +368,7 @@ radioButtons("areaPick", label = "Please select the participant's recruitment ar
 
 ```{r display id dropdown}
 
-# Display IDs from selected area (areaPick)
+# Display IDs from selected site (sitePick)
 renderUI(
   selectizeInput("idPick", label = "Select the participant's MindCrowd ID.",
               choices = c("",id_choices()$participant_id), selected = NULL)
@@ -302,8 +382,8 @@ renderUI(
 renderUI(
   HTML(
     if(isTruthy(input$idPick)){
-      kable(picked_id_data() %>% select(participant_id, area, age_group, sex),
-            col.names = c("Mindcrowd Participant Parent ID", "Area", "Age Group", "Sex"),
+      kable(picked_id_data() %>% select(participant_id, site, age_group, sex),
+            col.names = c("Mindcrowd Participant Parent ID", "Site", "Age Group", "Sex"),
             align = "c") %>%
         kable_styling(full_width = FALSE)
     }
@@ -364,13 +444,13 @@ renderUI(
 renderUI({
   # If there is an eligiblePick object created
   if(isTruthy(input$idPick) & isTruthy(input$eligiblePick)){ 
-    # Only show button if person does not already have an HML ID
+    # Only show info if person does not already have an HML ID
     if(input$eligiblePick == "Yes" & is.na((picked_id_data()$hml_id))){
       HTML(
-        new_data()[which(dat$participant_id == input$idPick),] %>%
-          remove_rownames() %>%
-          select(c(participant_id, area, age_group, sex, hml_id, hml_id_created_date)) %>%
-          kable(col.names = c("Mindcrowd Participant Parent ID", "Area", "Age Group", "Sex",
+        new_data()[which(new_data()$participant_id == input$idPick),] %>%
+        remove_rownames() %>%
+        select(c(participant_id, site, age_group, sex, hml_id, hml_id_created_date)) %>%
+          kable(col.names = c("Mindcrowd Participant Parent ID", "Site", "Age Group", "Sex",
                               "HML ID", "HML ID Created Date"),
                 align = "c") %>%
           kable_styling(full_width = FALSE)
@@ -401,16 +481,16 @@ renderUI(
 
 Manual ID Upload:
 
-If you cannot find the participant ID in the dropdown menu, or the participant is outside of the recruitment area, please select a recruitment area and upload a csv file with the participants' participant_id_parent, participant_id, or P2 MCID.
+If you cannot find the participant ID in the dropdown menu, or the participant is outside of the recruitment site, please select a recruitment site and upload a csv file with the participants' participant_id_parent, participant_id, or P2 MCID.
 
 If the submitted participant already has an HML ID, their ID and the date their ID was assigned will be displayed along with the newly created IDs for new participants.
 
 <center>
 
-```{r area select}
+```{r site select}
 
 renderUI({
-  selectInput("area_up", label = "Select recruitment area.",
+  selectInput("site_up", label = "Select recruitment site.",
               choices = c("", "Atlanta", "Baltimore", "Miami", "Tucson"), selected = NULL)
 })
 
@@ -430,11 +510,11 @@ fileInput("data_up",
 # Display ID dataset
 renderUI(
   HTML(
-    if(isTruthy(input$area_up) & isTruthy(input$data_up)){
+    if(isTruthy(input$site_up) & isTruthy(input$data_up)){
       new_id_data() %>% 
-        select(id, participant_id_parent, area, age_group, sex, hml_id, hml_id_created_date, assigned) %>%
+        select(participant_id, site, age_group, sex, hml_id, hml_id_created_date, assigned) %>%
         kable(align = "c",
-              col.names = c("Submitted ID", "Participant ID Parent", "Area", "Age Group", "Sex", "HML ID", "HML ID Created Date", " ")) %>% 
+              col.names = c("Submitted ID", "Site", "Age Group", "Sex", "HML ID", "HML ID Created Date", " ")) %>% 
         kable_styling(full_width = FALSE)
     }
   )
@@ -445,7 +525,7 @@ renderUI(
 ```{r submit data}
 
 renderUI(
-    if(isTruthy(input$area_up) & isTruthy(input$data_up)){
+    if(isTruthy(input$site_up) & isTruthy(input$data_up)){
         actionButton("saveIdData", "Confirm and Submit", icon = icon("download"))
     }
 )
@@ -468,7 +548,7 @@ If you assigned a new HML ID by mistake, please select the participant's HML ID 
 
 ```{r undo hml dropdown}
 
-# Display IDs from selected area (areaPick) and has an assigned ID
+# Display IDs from selected site (sitePick) and has an assigned ID
 renderUI({
   selectInput("idPickUndo", label = "Select the participant's HML ID.",
               choices = c("",id_choices_undo()$hml_id), selected = NULL)
