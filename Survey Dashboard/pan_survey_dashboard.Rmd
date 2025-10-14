@@ -93,7 +93,7 @@ consent_dat <- dbGetQuery(con, "SELECT hml_id, main_consent_date FROM p2_redcap_
          first_visit_date = ifelse(first_visit_date == "9/5/24", "2024-09-05", first_visit_date),
          # Check if eligible for second visit
          first_visit = 1,
-         second_visit = ifelse(as.numeric(Sys.Date() - as.Date(first_visit_date)) >= 365*2, 2, NA)) %>%
+         second_visit = ifelse(as.numeric(Sys.Date() - as.Date(first_visit_date)) >= 365*2-60, 2, NA)) %>%
   pivot_longer(cols = c(first_visit, second_visit),
                names_to = "name", values_to = "survey_visit_number") %>%
   select(hml_id, first_visit_date, survey_visit_number) %>%
