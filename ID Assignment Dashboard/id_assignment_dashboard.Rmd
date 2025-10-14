@@ -81,6 +81,10 @@ if(production){
                    , sslrootcert = 'global-bundle.pem'
   )
   
+  # id_dat <- dbReadTable(con, "dm_hml_id_app_data")
+  # write.csv(id_dat, file = "test_hml_id_app_data.csv", 
+  #           row.names = FALSE)
+  
   id_dat <- read.csv("test_hml_id_app_data.csv")
 }
 
@@ -113,15 +117,23 @@ dat <- screened_dat %>%
 save_data <- function(production, new_dat){
   # Display progress bar while saving in progress
   withProgress(message = "Saving... Please Wait", {
-    # Save data to database ---------------
-    dbWriteTable(con, "dm_hml_id_app_data", new_dat, overwrite = TRUE)
     
     # Get any HML IDs that need REDCap IDs generated
     hml_id_files <- dbReadTable(con, "redcap_id_assignment")
     
     updated_ids <- new_dat %>%
       filter(!is.na(hml_id),
-             !hml_id %in% hml_id_files$hml_id)
+             !hml_id %in% hml_id_files$hml_id) %>%
+      select(participant_id,
+             hml_id,
+             hml_id_created_date,
+             hml_id_undo,
+             sex,
+             race,
+             hispanic_latino,
+             area = site,
+             age_group,
+             memory_rank)
     
     if(!production){
       # If in test mode, save new assignment to local csv
@@ -132,6 +144,9 @@ save_data <- function(production, new_dat){
     }
     
     if(production){
+      # Save data to database ---------------
+      dbWriteTable(con, "dm_hml_id_app_data", new_dat, overwrite = TRUE)
+      
       # Write new hml ids to Box for REDCap assignment ------------
       # Define Box FTPS details
       # URL encode the path
