@@ -1,9 +1,8 @@
 # This R script generates data for the PAN Participant Tracker App
 
 
-# This code is for pulling REDCap recruitment data from postgres database and saving deidentified 
-# data to the Google Drive for the Participant Tracking dashboard.
-# If running code from home, need to connect to UA VPN.
+# This code is for pulling REDCap recruitment data from postgres database and then saving as
+# table in the db.
 # Written: 28-Jan-24
 
 rm(list = ls())
@@ -61,7 +60,7 @@ avlt <- dbReadTable(con, "p2_redcap_cognitive_function_avlt")
 biometrics <- dbReadTable(con, "p2_redcap_biometrics")
 
 neuropsych <- dbReadTable(con, "p2_redcap_recruitment_info") %>%
-  select(hml_id, record_id, participant_id_parent = participant_id_parent_x, neuropsychology_file_upload)
+  select(hml_id, record_id, participant_id_parent, neuropsychology_file_upload)
 
 base <- full_join(phq9, moca, by = c("hml_id", "record_id", "participant_id_parent")) %>%
   full_join(naart, by = c("hml_id", "record_id", "participant_id_parent")) %>%
