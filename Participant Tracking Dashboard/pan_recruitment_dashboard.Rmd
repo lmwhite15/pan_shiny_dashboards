@@ -151,8 +151,11 @@ kable_function <- function(data, vars = NULL, denom = NULL){
 # time = time increments to group counts and plot along x-axis
 plot_function <- function(data, time){
   plot <- data %>%
-    mutate(x_label = str_replace({{time}}, " ", "\n"),
-           x_label = fct_reorder(x_label, day_time)) %>%
+    filter(!is.na(day_time)) %>%
+    mutate(
+      x_label = str_replace({{time}}, " ", "\n")
+      ,x_label = fct_reorder(x_label, day_time)
+      ) %>%
     group_by(x_label) %>% 
     count() %>% ungroup() %>%
     arrange(x_label) %>%
@@ -273,7 +276,7 @@ Participants assigned an HML ID (and are in REDCap):
 <center>
 
 ```{r recruit graph}
-renderPlotly(plot_function(hml_data, month_name_time))
+renderPlotly(plot_function(hml_data, quarter_time))
 ```
 
 </center>
@@ -332,6 +335,7 @@ Participants with a REDCap main_consent_date:
 
 ```{r consent graph}
 conditionalPanel(condition = "input.nonmissing == 'consent' | input.nonmissing == 'compare'", plotlyOutput("consented_plot"))
+
 conditionalPanel(condition = "input.nonmissing == 'missing'", plotlyOutput("nonmissing_plot"))
 
 output$consented_plot <- renderPlotly(plot_function(consented, quarter_time))
@@ -345,8 +349,10 @@ output$nonmissing_plot <- renderPlotly(plot_function(consented %>%
 
 ```{r consent table}
 conditionalPanel(condition = "input.nonmissing == 'consent'", htmlOutput("consented_table"))
+
 conditionalPanel(condition = "input.nonmissing == 'missing'", textOutput("nonmissing_text"), 
                  htmlOutput("nonmissing_table"))
+
 conditionalPanel(condition = "input.nonmissing == 'compare'", textOutput("compare_text"),
                  htmlOutput("compare_table"))
 

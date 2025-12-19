@@ -169,7 +169,7 @@ assess <- base %>%
   mutate(area = site) %>%
   # Cognitive Summaries ~~~~~~~~~~~~~~
   mutate(across(phq9_endorse_q9:avlt_trial_a7_zscore, ~ifelse(is.na(.), 1, 0))) %>%
-  mutate("PHQ-9" = ifelse((phq9_endorse_q9 + phq9_total + phq9_complete) > 0, "Missing", "Non-Missing"),
+  mutate("PHQ-9" = ifelse(phq9_complete == 0, "Missing", "Non-Missing"),
          # 20-Feb-24: Removed the education bonus and mis_total variables since not used in final total:
          MoCA = ifelse(select(., moca_abstraction, starts_with("moca_attention"), moca_delay_recall, starts_with("moca_language_"),
                               moca_visuospatial, moca_naming, moca_orientation, moca_total) %>% rowSums() > 0, "Missing", "Non-Missing"),
