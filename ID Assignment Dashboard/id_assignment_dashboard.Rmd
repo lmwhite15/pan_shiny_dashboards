@@ -23,7 +23,7 @@ editor_options:
 
 ```{r production}
 # Is the app ready to be published to RStudio Connect?
-production <- FALSE
+production <- TRUE
 
 # 2025-10-11: Terrill is owner of app in viz.datascience.arizona.edu so need 
             # to publish through his account
@@ -81,9 +81,7 @@ if(production){
                    , sslrootcert = 'global-bundle.pem'
   )
   
-  # id_dat <- dbReadTable(con, "dm_hml_id_app_data")
-  # write.csv(id_dat, file = "test_hml_id_app_data.csv", 
-  #           row.names = FALSE)
+  # id_dat <- dbReadTable(con, "dm_hml_id_app_data"); write.csv(id_dat, file = "test_hml_id_app_data.csv",row.names = FALSE)
   
   id_dat <- read.csv("test_hml_id_app_data.csv")
 }
@@ -120,7 +118,7 @@ save_data <- function(production, new_dat){
     
     # Get any HML IDs that need REDCap IDs generated
     hml_id_files <- dbReadTable(con, "redcap_id_assignment")
-    
+
     updated_ids <- new_dat %>%
       filter(!is.na(hml_id),
              !hml_id %in% hml_id_files$hml_id) %>%
@@ -139,8 +137,8 @@ save_data <- function(production, new_dat){
       # If in test mode, save new assignment to local csv
       write.csv(new_dat, "test_hml_id_app_data.csv", row.names = FALSE)
       
-      # Test saving new HML ID to REDCap assignment folder:
-      if(nrow(updated_ids) > 0) write.csv(updated_ids, file = "test_redcap_id_assignment.csv", row.names = FALSE)
+      # # Test saving new HML ID to REDCap assignment folder:
+      # if(nrow(updated_ids) > 0) write.csv(updated_ids, file = "test_redcap_id_assignment.csv", row.names = FALSE)
     }
     
     if(production){
@@ -151,20 +149,23 @@ save_data <- function(production, new_dat){
       # Define Box FTPS details
       # URL encode the path
       encoded_path <- URLencode("[UA BOX Health] MindCrowd Inbound/HML_ID_Assignment/")
-      
+
       # Define the FTPS base URL
       ftps_base_url <- "ftps://ftp.box.com/"
-      
+
       # Combine the base URL with the encoded path
       ftps_url <- paste0(ftps_base_url, encoded_path)
       userpwd <- Sys.getenv("FTP_PASSWORD")
-      
+
       # Define the file path on your local system (file to save to HML ID assignment folder)
       local_file <- "hml_id_data.csv"
       output_file_path <- file.path(getwd(), local_file)
-      
+
       # If there are new IDs then upload list to Box for REDCap ID generation
       if(nrow(updated_ids) > 0){
+        # Remove any whitespaces from ID
+        updated_ids$participant_id <- stringr::str_trim(updated_ids$participant_id, side = "both")
+        
         write.csv(updated_ids, file = output_file_path,
                   row.names = F)
         # Upload the file
