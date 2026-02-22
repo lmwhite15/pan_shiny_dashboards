@@ -37,7 +37,7 @@ library(flexdashboard) # Shiny app package
 library(DBI) # Connecting to database
 library(tidyverse) # Data wrangling
 library(kableExtra) # Creates nice tables
-library(RCurl) # Connecting to Box Health to generate new REDCap ID
+# library(RCurl) # Connecting to Box Health to generate new REDCap ID
 
 # openxlsx::read.xlsx is used in manual ID generation function
 
@@ -145,37 +145,37 @@ save_data <- function(production, new_dat){
       # Save data to database ---------------
       dbWriteTable(con, "dm_hml_id_app_data", new_dat, overwrite = TRUE)
       
-      # Write new hml ids to Box for REDCap assignment ------------
-      # Define Box FTPS details
-      # URL encode the path
-      encoded_path <- URLencode("[UA BOX Health] MindCrowd Inbound/HML_ID_Assignment/")
-
-      # Define the FTPS base URL
-      ftps_base_url <- "ftps://ftp.box.com/"
-
-      # Combine the base URL with the encoded path
-      ftps_url <- paste0(ftps_base_url, encoded_path)
-      userpwd <- Sys.getenv("FTP_PASSWORD")
-
-      # Define the file path on your local system (file to save to HML ID assignment folder)
-      local_file <- "hml_id_data.csv"
-      output_file_path <- file.path(getwd(), local_file)
-
-      # If there are new IDs then upload list to Box for REDCap ID generation
-      if(nrow(updated_ids) > 0){
-        # Remove any whitespaces from ID
-        updated_ids$participant_id <- stringr::str_trim(updated_ids$participant_id, side = "both")
-        
-        write.csv(updated_ids, file = output_file_path,
-                  row.names = F)
-        # Upload the file
-        ftpUpload(
-          what = output_file_path,
-          to = paste0(ftps_url, basename(output_file_path)),
-          userpwd = userpwd,
-          verbose = TRUE
-        )
-      }
+      # # Write new hml ids to Box for REDCap assignment ------------
+      # # Define Box FTPS details
+      # # URL encode the path
+      # encoded_path <- URLencode("[UA BOX Health] MindCrowd Inbound/HML_ID_Assignment/")
+      # 
+      # # Define the FTPS base URL
+      # ftps_base_url <- "ftps://ftp.box.com/"
+      # 
+      # # Combine the base URL with the encoded path
+      # ftps_url <- paste0(ftps_base_url, encoded_path)
+      # userpwd <- Sys.getenv("FTP_PASSWORD")
+      # 
+      # # Define the file path on your local system (file to save to HML ID assignment folder)
+      # local_file <- "hml_id_data.csv"
+      # output_file_path <- file.path(getwd(), local_file)
+      # 
+      # # If there are new IDs then upload list to Box for REDCap ID generation
+      # if(nrow(updated_ids) > 0){
+      #   # Remove any whitespaces from ID
+      #   updated_ids$participant_id <- stringr::str_trim(updated_ids$participant_id, side = "both")
+      #   
+      #   write.csv(updated_ids, file = output_file_path,
+      #             row.names = F)
+      #   # Upload the file
+      #   ftpUpload(
+      #     what = output_file_path,
+      #     to = paste0(ftps_url, basename(output_file_path)),
+      #     userpwd = userpwd,
+      #     verbose = TRUE
+      #   )
+      # }
     }
     
   })
