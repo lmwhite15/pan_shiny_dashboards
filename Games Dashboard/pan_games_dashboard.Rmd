@@ -134,6 +134,10 @@ participant_data <- info_hml_id_data %>%
   mutate(participant_id = case_when(hml_id == "HML0765" ~ "003Vu00000hTICAIA4",
                                     hml_id == "HML0793" ~ "003Vu00000lDflWIAS",
                                     TRUE ~ participant_id)) %>%
+  # 2026-05-11: Same as above
+  mutate(participant_id = case_when(hml_id == "HML1318" ~ "003Vu00001tEcN1IAK",
+                                    TRUE ~ participant_id)) %>%
+  distinct() %>%
   # Pivot longer so each visit gets a row
   mutate(across(c(ends_with("date_before"), ends_with("date_after")), as.Date)) %>%
   pivot_longer(cols = c(ends_with("date_before"), ends_with("date_after")),

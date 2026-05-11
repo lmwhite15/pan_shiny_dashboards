@@ -100,7 +100,9 @@ consent_dat <- dbGetQuery(con, "SELECT hml_id, main_consent_date FROM p2_redcap_
   filter(!is.na(survey_visit_number))
 
 hml_ids <- hml_ids %>%
-  left_join(consent_dat, by = "hml_id")
+  left_join(consent_dat, by = "hml_id") %>%
+  mutate(survey_visit_number = ifelse(is.na(first_visit_date), 1, survey_visit_number),
+         first_visit_date = ifelse(is.na(first_visit_date), as.character(Sys.Date()), first_visit_date))
 
 # Get surveys --------------
 survey_names <- c("adl", "anxiety", "brain_disease", "covid", "diet", "fhad", 
@@ -116,7 +118,9 @@ raw_files_list <- lapply(survey_names,
                                                   (
                                                   '0035e000016Nk2dAAC',
                                                   '003Vu00000hTICAIA4', 
-                                                  '003Vu00000lDflWIAS'
+                                                  '003Vu00000lDflWIAS',
+                                                  '003Vu00000yhm8tIAA',
+                                                  '003Vu00001tEcN1IAK'
                                                   )")) %>% 
                              mutate_all(~ifelse(. == "", NA, .))
                            
@@ -140,6 +144,19 @@ raw_files_list <- lapply(survey_names,
                            new_x$record_id[which(new_x$participant_id == "003Vu00000lDflWIAS")] <- "777"
                            new_x$site[which(new_x$participant_id == "003Vu00000lDflWIAS")] <- "Tucson"
                            new_x$p2_participant[which(new_x$participant_id == "003Vu00000lDflWIAS")] <- "True"
+                           
+                           # 03-Nov-2025 temp fix: HML ID originally submitted with created date instead of MC ID
+                           new_x$hml_id[which(new_x$participant_id == "003Vu00000yhm8tIAA")] <- "HML1191"
+                           new_x$record_id[which(new_x$participant_id == "003Vu00000yhm8tIAA")] <- "1178"
+                           new_x$site[which(new_x$participant_id == "003Vu00000yhm8tIAA")] <- "Miami"
+                           new_x$p2_participant[which(new_x$participant_id == "003Vu00000yhm8tIAA")] <- "True"
+                           
+                           # 11-May-2026: Participants logged into MC under different emails than what
+                           # was used to assign HML IDs.
+                           new_x$hml_id[which(new_x$participant_id == "003Vu00001tEcN1IAK")] <- "HML1318"
+                           new_x$record_id[which(new_x$participant_id == "003Vu00001tEcN1IAK")] <- "1303"
+                           new_x$site[which(new_x$participant_id == "003Vu00001tEcN1IAK")] <- "Tucson"
+                           new_x$p2_participant[which(new_x$participant_id == "003Vu00001tEcN1IAK")] <- "True"
                            
                            new_x
                          })
@@ -194,13 +211,15 @@ files_list <- lapply(raw_files_list_edit, function(x){
   recent_x <- complete_x %>%
     left_join(consent_dat %>% filter(survey_visit_number == 1) %>% 
                 select(hml_id, first_visit_date), by = "hml_id") %>%
+    # 14-Oct-25: HML1152 is missing first_visit_date??
+    mutate(first_visit_date = ifelse(is.na(first_visit_date), as.character(Sys.Date()), first_visit_date)) %>%
     mutate(
       # Round dates to month instead of using day
       created_date_survey_round = paste0(str_sub(created_date_survey, end = -3), "01"),
       first_visit_date = paste0(str_sub(first_visit_date, end = -3), "01"),
       # Get time since first visit and assign any surveys past the second year as second visit surveys
       time_since_first_visit = as.Date(created_date_survey_round) - as.Date(first_visit_date),
-      survey_visit_number = ifelse(as.numeric(time_since_first_visit) >= 365*2, 2, 1)
+      survey_visit_number = ifelse(as.numeric(time_since_first_visit) >= 365*2-90, 2, 1)
     ) %>% 
     # Get most recent, completed survey if available, otherwise select most recent survey
     # This is calculated within ID and visit number
@@ -430,7 +449,6 @@ overall_attempted_all_participants_with_redcap <- overall_attempted_all_particip
 
 
 ```
-
 
 ```{r functions for plots and tables}
 
