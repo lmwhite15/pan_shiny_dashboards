@@ -300,11 +300,9 @@ redcap_data <- response_files_list
 games_update_date <- format(Sys.Date(), "%b %d, %Y")
 
 batch_data <- dbReadTable(con, "batch_id") %>%
-  # Remove updates from HML ID script
-  mutate(last_digits = str_sub(batchid, start = -3)) %>%
-  filter(last_digits != 999) %>%
   # Get latest update date
-  filter(batchid == max(batchid))
+  mutate(new_timestamp = as.Date(timestamp, format = "%m/%d/%Y")) %>%
+  filter(new_timestamp == max(new_timestamp))
 
 latest_data_date <- as.Date(batch_data$timestamp[1], format = "%m/%d/%Y") %>%
   format("%b %d, %Y")

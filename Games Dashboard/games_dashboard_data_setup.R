@@ -49,8 +49,8 @@ participant_data <- info_hml_id_data %>%
       TRUE ~ hml_id_created_date)),
     # Some participants were missed in the previous filter
     filter_date = as.Date(ifelse(is.na(filter_date), hml_id_created_date, filter_date)),
-    study_start_date_before = as.Date(hml_id_created_date - date_buffer),
-    study_start_date_after = as.Date(hml_id_created_date + date_buffer)) %>%
+    study_start_date_before = as.Date(filter_date - date_buffer),
+    study_start_date_after = as.Date(filter_date + date_buffer)) %>%
   select(-c(hml_id_created_date, main_consent_date, filter_date)) %>%
   # 2025-03-21: Participants logged into MC under different emails than what was used to assign HML IDs.
   mutate(participant_id = case_when(hml_id == "HML0765" ~ "003Vu00000hTICAIA4",
