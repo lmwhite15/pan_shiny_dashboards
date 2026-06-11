@@ -620,11 +620,12 @@ table_function <- function(picked_site = "All", survey = "All", picked_id = "All
         left_join(
           overall_redcap_completion %>%
             rename(redcap_visit = visit) %>%
+            mutate(visit = as.numeric(visit)) %>%
             filter(hml_id == picked_id, redcap_visit == visit) %>%
             select(Survey, completion),
           by = "Survey"
         ) %>%
-        mutate(completion = ifelse(Completed == "Not Attempted", "", completion),
+        mutate(#completion = ifelse(Completed == "Not Attempted", "", completion),
                completion = ifelse(is.na(completion), "", completion)) %>%
         kable(col.names = c("Survey", "Date Attempted", "Completion Status", "REDCap Completion Status")) %>%
         kable_styling(full_width = F)
