@@ -637,7 +637,7 @@ table_function <- function(picked_site = "All", survey = "All", picked_id = "All
         # Format REDCap responses to attach to MC survey responses
         redcap_table_dat <- formatted_redcap_import_files_list[[survey]] %>%
           rename(survey_visit_number = visit) %>%
-          filter(hml_id == picked_id, survey_visit_number == visit) %>%
+          filter(hml_id == picked_id, survey_visit_number == as.double(visit)) %>%
           select(-c(hml_id, record_id, participant_id_parent, survey_visit_number, 
                     ends_with("_complete"), ends_with("_status"), ends_with("_timestamp"))) %>%
           mutate_all(as.character) %>%
@@ -645,7 +645,7 @@ table_function <- function(picked_site = "All", survey = "All", picked_id = "All
         
         # Pull MC survey responses and attach to REDCap responses
         files_list[[survey]] %>%
-          filter(hml_id == picked_id, survey_visit_number == visit) %>%
+          filter(hml_id == picked_id, survey_visit_number == as.double(visit)) %>%
           select(-c(hml_id, record_id, site, survey_visit_number, ends_with("_timestamp"), ends_with("_completed"))) %>%
           select(paste0(str_extract(names(.), ".*(?=_)"), "_v1.0.", 1:ncol(.))) %>%
           mutate_all(as.character) %>%
@@ -662,7 +662,7 @@ table_function <- function(picked_site = "All", survey = "All", picked_id = "All
                                                is.na(`REDCap Response`) & Response == "Not Applicable" ~  "Not Applicable",
                                                TRUE ~ `REDCap Response`)) %>%
           select(-redcap_item) %>%
-          kable %>%
+          kable() %>%
           kable_styling(full_width = F)
       }
     }
