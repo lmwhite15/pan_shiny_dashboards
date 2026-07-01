@@ -86,7 +86,7 @@ hml_ids <- dbReadTable(con, "info_from_redcap") %>%
 # Get hml id generated date if consent is missing:
 missing_consent_dat <- dbGetQuery(con, "SELECT hml_id, hml_id_created_date FROM info_hml_id_data")
 
-consent_dat <- dbGetQuery(con, "SELECT hml_id, main_consent_date FROM p2_redcap_consent_form") %>%
+consent_dat <- dbGetQuery(con, "SELECT hml_id, main_consent_date FROM p2_redcap_consent_form WHERE visit = 1") %>%
   full_join(missing_consent_dat, by = "hml_id") %>%
   mutate(first_visit_date = ifelse(is.na(main_consent_date), hml_id_created_date, main_consent_date),
          # One of the dates is in the wrong format

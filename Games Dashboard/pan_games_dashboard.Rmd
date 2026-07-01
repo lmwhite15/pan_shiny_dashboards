@@ -95,6 +95,7 @@ participant_id_dat <- dbReadTable(con, "views_all_ids") %>%
 
 # Get eligibility date
 participant_elig_dat <- dbReadTable(con, "p2_redcap_consent_form") %>%
+  filter(visit == 1) %>%
   select(hml_id, main_consent_date)
 
 # Date buffer for filtering games +/- days around participant HML ID generation date
