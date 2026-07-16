@@ -67,6 +67,15 @@ source("survey_redcap_formatting_backwards.R")
 
 load("survey_data_dictionary.Rdata")
 
+# Add new QPAR questions to data dictionary
+survey_data_dictionary <- survey_data_dictionary %>%
+  rbind(
+    c("QPAR_v1.0.17", "Engage_in_Moderate_Housework_or_Labor", "", "QPAR Survey")
+    ,c("QPAR_v1.0.18", "Hours_Engage_in_Moderate_Housework_or_Labor", "", "QPAR Survey")
+    ,c("QPAR_v1.0.19", "Engage_in_Heavy_Housework_or_Labor", "", "QPAR Survey")
+    ,c("QPAR_v1.0.20", "Hours_Engage_in_Heavy_Housework_or_Labor", "", "QPAR Survey")
+  )
+
 theme_set(theme_bw())
 
 ```
@@ -116,11 +125,13 @@ raw_files_list <- lapply(survey_names,
                                                            " WHERE hml_id IS NOT NULL 
                                                   or participant_id IN 
                                                   (
-                                                  '0035e000016Nk2dAAC',
-                                                  '003Vu00000hTICAIA4', 
-                                                  '003Vu00000lDflWIAS',
-                                                  '003Vu00000yhm8tIAA',
-                                                  '003Vu00001tEcN1IAK'
+                                                  '0035e000016Nk2dAAC'
+                                                  ,'003Vu00000hTICAIA4'
+                                                  ,'003Vu00000lDflWIAS'
+                                                  ,'003Vu00000yhm8tIAA'
+                                                  ,'003Vu00001tEcN1IAK'
+                                                  ,'003Vu00000P6tprIAB' 
+                                                  ,'003Vu000016eCZeIAM'
                                                   )")) %>% 
                              mutate_all(~ifelse(. == "", NA, .))
                            
@@ -157,6 +168,17 @@ raw_files_list <- lapply(survey_names,
                            new_x$record_id[which(new_x$participant_id == "003Vu00001tEcN1IAK")] <- "1303"
                            new_x$site[which(new_x$participant_id == "003Vu00001tEcN1IAK")] <- "Tucson"
                            new_x$p2_participant[which(new_x$participant_id == "003Vu00001tEcN1IAK")] <- "True"
+                           
+                           # 16-Jul-2026 Incorrect MCIDs were registered to these HML IDs
+                           new_x$hml_id[which(new_x$participant_id == "003Vu000016eCZeIAM")] <- "HML1147"
+                           new_x$record_id[which(new_x$participant_id == "003Vu000016eCZeIAM")] <- "1132"
+                           new_x$site[which(new_x$participant_id == "003Vu000016eCZeIAM")] <- "Atlanta"
+                           new_x$p2_participant[which(new_x$participant_id == "003Vu000016eCZeIAM")] <- "True"
+                           
+                           new_x$hml_id[which(new_x$participant_id == "003Vu00000P6tprIAB")] <- "HML1211"
+                           new_x$record_id[which(new_x$participant_id == "003Vu00000P6tprIAB")] <- "1196"
+                           new_x$site[which(new_x$participant_id == "003Vu00000P6tprIAB")] <- "Atlanta"
+                           new_x$p2_participant[which(new_x$participant_id == "003Vu00000P6tprIAB")] <- "True"
                            
                            new_x
                          })
