@@ -57,6 +57,9 @@ lods <- cytokine_reads$lods
 # Cytokine data
 cytokine_data <- cytokine_reads$readings
 
+# File info
+file_type <- cytokine_reads$file_info
+
 long_cytokine_data <- cytokine_data %>%
   filter(BARCODE != "SAMPLE ID") %>%
   select(barcode = BARCODE, file_date, date_run, all_of(cytokines)) %>%
@@ -64,6 +67,7 @@ long_cytokine_data <- cytokine_data %>%
                names_to = "analyte",
                values_to = "reading") %>%
   left_join(lods, by = c("analyte", "file_date")) %>%
+  left_join(file_type, by = "file_date") %>%
   mutate(note = reading,
          reading = as.numeric(reading),
          below_lod = ifelse((note == "ND" | reading < lod) & note != "%MFIe", 1, 0),
@@ -79,11 +83,16 @@ cytokine_means <- cytokine_reads$means %>%
          text = paste0("File Date: ", file_date, "\n", 
                        "Analyte: ", analyte, "\n", 
                        "Log Mean: ", round(cytokine_date_mean, 1))) %>%
+  left_join(file_type, by = "file_date") %>%
   filter(cytokine_date_mean != "NaN")
 
+plasma_cytokine_means <- filter(cytokine_means, file_type == "Plasma")
+
+csf_cytokine_means <- filter(cytokine_means, file_type == "CSF")
+
 # Get proportion of observations BLD
-prop_bld <- long_cytokine_data %>%
-  # rbind(long_cytokine_data %>% mutate(analyte = "Overall")) %>%
+plasma_prop_bld <- long_cytokine_data %>%
+  filter(file_type == "Plasma") %>%
   select(file_date, analyte, below_lod) %>%
   summarise(sum = sum(below_lod),
             plate_num = n(), 
@@ -92,25 +101,19 @@ prop_bld <- long_cytokine_data %>%
          text = paste0("File Date: ", file_date, "\n", 
                        "%BLD: ", round(prop, 1), "% (", sum, "/", plate_num, ")"))
 
-display_cytokine_data <- long_cytokine_data %>%
-  left_join(select(cytokine_means, file_date, analyte, cytokine_date_mean), by = c("file_date", "analyte")) %>%
-  mutate(cytokine_date_mean = exp(cytokine_date_mean)) %>%
-  # Replace obs below LOD with 1/2*LOD and High Vars with run mean
-  mutate(reading = ifelse(below_lod == 1, 0.5*lod, reading),
-         reading = ifelse(high_var == 1, cytokine_date_mean, reading),
-         reading = as.numeric(reading)) %>%
-  select(barcode, file_date, date_run, analyte, reading) %>%
-  pivot_wider(id_cols = c(barcode, file_date, date_run),
-              names_from = analyte,
-              values_from = reading)
-
-```
-
-```{r set-up-plots}
+csf_prop_bld <- long_cytokine_data %>%
+  filter(file_type == "CSF") %>%
+  select(file_date, analyte, below_lod) %>%
+  summarise(sum = sum(below_lod),
+            plate_num = n(), 
+            .by = c(file_date, analyte)) %>%
+  mutate(prop = sum/plate_num * 100,
+         text = paste0("File Date: ", file_date, "\n", 
+                       "%BLD: ", round(prop, 1), "% (", sum, "/", plate_num, ")"))
 
 # Get proportion of observations with high variability
-prop_high_var <- long_cytokine_data %>%
-  # rbind(long_cytokine_data %>% mutate(analyte = "Overall")) %>%
+plasma_prop_high_var <- long_cytokine_data %>%
+  filter(file_type == "Plasma") %>%
   select(file_date, analyte, high_var) %>%
   summarise(sum = sum(high_var),
             plate_num = n(), 
@@ -119,16 +122,46 @@ prop_high_var <- long_cytokine_data %>%
          text = paste0("File Date: ", file_date, "\n", 
                        "%High Var: ", round(prop, 1), "% (", sum, "/", plate_num, ")"))
 
-lod_plot <- ggplot(prop_bld, aes(x = file_date, y = prop, fill = file_date, group = file_date, text = text)) +
-  geom_bar(stat = "identity", position = "dodge", color = "grey40") +
-  labs(x = "", y = "% of Obs Below LOD", fill = "Batch Date") +
-  facet_wrap(~analyte, ncol = 6) +
-  scale_fill_viridis_d(option = "plasma") +
-  theme_bw() + 
-  theme(legend.position = "none",
-        axis.text.x = element_text(angle = 90))
+csf_prop_high_var <- long_cytokine_data %>%
+  filter(file_type == "CSF") %>%
+  select(file_date, analyte, high_var) %>%
+  summarise(sum = sum(high_var),
+            plate_num = n(), 
+            .by = c(file_date, analyte)) %>%
+  mutate(prop = sum/plate_num * 100,
+         text = paste0("File Date: ", file_date, "\n", 
+                       "%High Var: ", round(prop, 1), "% (", sum, "/", plate_num, ")"))
 
-high_var_plot <- ggplot(prop_high_var, aes(x = file_date, y = prop, fill = file_date, group = file_date, text = text)) +
+display_cytokine_data <- long_cytokine_data %>%
+  left_join(select(cytokine_means, file_date, analyte, cytokine_date_mean), by = c("file_date", "analyte")) %>%
+  mutate(cytokine_date_mean = exp(cytokine_date_mean)) %>%
+  # Replace obs below LOD with 1/2*LOD and High Vars with run mean
+  mutate(reading = ifelse(below_lod == 1, 0.5*lod, reading),
+         reading = ifelse(high_var == 1, cytokine_date_mean, reading),
+         reading = as.numeric(reading)) %>%
+  select(barcode, file_date, date_run, sample_type = file_type, analyte, reading) %>%
+  pivot_wider(id_cols = c(barcode, file_date, date_run, sample_type),
+              names_from = analyte,
+              values_from = reading)
+
+```
+
+```{r set-up-plots}
+
+lod_plot <- function(data){
+  ggplot(data, 
+         aes(x = file_date, y = prop, fill = file_date, group = file_date, text = text)) +
+    geom_bar(stat = "identity", position = "dodge", color = "grey40") +
+    labs(x = "", y = "% of Obs Below LOD", fill = "Batch Date") +
+    facet_wrap(~analyte, ncol = 6) +
+    scale_fill_viridis_d(option = "plasma") +
+    theme_bw() + 
+    theme(legend.position = "none",
+          axis.text.x = element_text(angle = 90))
+}
+
+high_var_plot <- function(data){
+  ggplot(data, aes(x = file_date, y = prop, fill = file_date, group = file_date, text = text)) +
   geom_bar(stat = "identity", position = "dodge", color = "grey40") +
   labs(x = "", y = "% of Obs with High Var", fill = "Batch Date") +
   facet_wrap(~analyte, ncol = 6) +
@@ -136,15 +169,18 @@ high_var_plot <- ggplot(prop_high_var, aes(x = file_date, y = prop, fill = file_
   theme_bw() + 
   theme(legend.position = "none",
         axis.text.x = element_text(angle = 90))
+}
 
-mean_vals <- ggplot(cytokine_means, 
-                    aes(x = analyte, y = cytokine_date_mean, group = file_date, fill = file_date, text = text)) +
+mean_vals <- function(data){
+  ggplot(data, 
+         aes(x = analyte, y = cytokine_date_mean, group = file_date, fill = file_date, text = text)) +
   geom_bar(stat = "identity", position = "dodge") +
   labs(x = "", y = "Mean Log(Measure)", fill = "Batch Date") +
   scale_fill_viridis_d(option = "plasma") +
   theme_bw() + 
   theme(legend.position = "top",
         axis.text.x = element_text(angle = 90))
+}
 
 ```
 
@@ -157,10 +193,17 @@ Observations Below Limit of Detection
 Column 
 ---------------------------------------
 
-### {data-height=700}
+### Plasma Plates{data-height=500}
 
 ```{r}
-ggplotly(lod_plot, tooltip = c("text")) %>% 
+ggplotly(lod_plot(plasma_prop_bld), tooltip = c("text")) %>% 
+  layout(legend = list(y = 1.15))
+```
+
+### CSF Plates {data-height=500}
+
+```{r}
+ggplotly(lod_plot(csf_prop_bld), tooltip = c("text")) %>% 
   layout(legend = list(y = 1.15))
 ```
 
@@ -170,10 +213,17 @@ Observations With High Variability
 Column 
 ---------------------------------------
 
-### {data-height=700}
+### Plasma Plates {data-height=500}
 
 ```{r}
-ggplotly(high_var_plot, tooltip = c("text")) %>% 
+ggplotly(high_var_plot(plasma_prop_high_var), tooltip = c("text")) %>% 
+  layout(legend = list(y = 1.15))
+```
+
+### CSF Plates {data-height=500}
+
+```{r}
+ggplotly(high_var_plot(csf_prop_high_var), tooltip = c("text")) %>% 
   layout(legend = list(y = 1.15))
 ```
 
@@ -183,9 +233,15 @@ Mean Analyte Values
 Column 
 ---------------------------------------
 
-### {data-height=700}
+### Plasma Plates{data-height=500}
 ```{r}
-ggplotly(mean_vals, tooltip = c("text")) %>% 
+ggplotly(mean_vals(plasma_cytokine_means), tooltip = c("text")) %>% 
+  layout(legend = list(y = 1.1))
+```
+
+### CSF Plates{data-height=500}
+```{r}
+ggplotly(mean_vals(csf_cytokine_means), tooltip = c("text")) %>% 
   layout(legend = list(y = 1.1))
 ```
 
@@ -211,7 +267,7 @@ output$data <- DT::renderDataTable({
   # Displayed data
   display_cytokine_data %>% 
     filter(date_run %in% input$plate_select) %>%
-    mutate(across(-c(barcode, file_date, date_run), ~round(as.numeric(.), 2))) %>%
+    mutate(across(all_of(cytokines), ~round(as.numeric(.), 2))) %>%
     DT::datatable(
       rownames = FALSE,
       extensions = "Buttons",
