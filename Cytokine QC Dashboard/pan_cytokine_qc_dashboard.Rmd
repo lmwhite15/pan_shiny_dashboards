@@ -58,13 +58,16 @@ lods <- cytokine_reads$lods
 cytokine_data <- cytokine_reads$readings
 
 long_cytokine_data <- cytokine_data %>%
+  filter(BARCODE != "SAMPLE ID") %>%
   select(barcode = BARCODE, file_date, date_run, all_of(cytokines)) %>%
   pivot_longer(cols = -c(barcode, file_date, date_run), 
                names_to = "analyte",
                values_to = "reading") %>%
   left_join(lods, by = c("analyte", "file_date")) %>%
-  mutate(below_lod = ifelse((reading == "ND" | reading < lod) & reading != "%MFIe", 1, 0),
-         high_var = ifelse(reading == "%MFIe", 1, 0),
+  mutate(note = reading,
+         reading = as.numeric(reading),
+         below_lod = ifelse((note == "ND" | reading < lod) & note != "%MFIe", 1, 0),
+         high_var = ifelse(note == "%MFIe", 1, 0),
          file_date = format(file_date, format = "%y-%m-%d"),
          file_date = factor(file_date))
 
@@ -94,7 +97,8 @@ display_cytokine_data <- long_cytokine_data %>%
   mutate(cytokine_date_mean = exp(cytokine_date_mean)) %>%
   # Replace obs below LOD with 1/2*LOD and High Vars with run mean
   mutate(reading = ifelse(below_lod == 1, 0.5*lod, reading),
-         reading = ifelse(high_var == 1, cytokine_date_mean, reading)) %>%
+         reading = ifelse(high_var == 1, cytokine_date_mean, reading),
+         reading = as.numeric(reading)) %>%
   select(barcode, file_date, date_run, analyte, reading) %>%
   pivot_wider(id_cols = c(barcode, file_date, date_run),
               names_from = analyte,
