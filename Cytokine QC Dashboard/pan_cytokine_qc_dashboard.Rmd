@@ -1,0 +1,236 @@
+---
+title: "Millipore QC Tracking"
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: scroll
+    css: custom.css
+    social: menu
+    logo: PAN_logo3.png
+    favicon: PAN_logo3.png
+runtime: shiny
+editor_options: 
+  chunk_output_type: console
+---
+
+```{=html}
+<style type="text/css">
+
+  .chart-title {  /* chart_title  */
+    font-size: 22px;
+
+</style>
+```
+
+<!-- Server -->
+
+```{r setup, include=FALSE}
+
+library(shiny)
+library(flexdashboard) # Easy Shiny app setup
+library(tidyverse) # Data wrangling
+library(plotly) # Interactive plots
+library(DT) # Interactive tables
+
+# packages <- c("httr",
+#               "xml2",
+#               "ssh")
+
+# Get data
+# source("get_cytokine_files.R")
+load("xlsx_data.Rdata")
+load("lod_data.Rdata")
+
+xlsx_files <- names(xlsx_data)
+
+# Get function combines cytokines and lods into one data frame
+source("cytokine_data_processing.R")
+cytokine_reads <- cytokine_reads_function(file_names = xlsx_files, 
+                                          file_data = xlsx_data,
+                                          limit_data = lod_data)
+
+# List of cytokines in data
+cytokines <- cytokine_reads$cytokines
+
+# LOD data
+lods <- cytokine_reads$lods
+
+# Cytokine data
+cytokine_data <- cytokine_reads$readings
+
+long_cytokine_data <- cytokine_data %>%
+  select(barcode = BARCODE, file_date, date_run, all_of(cytokines)) %>%
+  pivot_longer(cols = -c(barcode, file_date, date_run), 
+               names_to = "analyte",
+               values_to = "reading") %>%
+  left_join(lods, by = c("analyte", "file_date")) %>%
+  mutate(below_lod = ifelse((reading == "ND" | reading < lod) & reading != "%MFIe", 1, 0),
+         high_var = ifelse(reading == "%MFIe", 1, 0),
+         file_date = format(file_date, format = "%y-%m-%d"),
+         file_date = factor(file_date))
+
+# Means for each cytokine by plate
+cytokine_means <- cytokine_reads$means %>%
+  mutate(file_date = format(file_date, format = "%y-%m-%d"),
+         file_date = factor(file_date),
+         analyte = fct_reorder(analyte, cytokine_date_mean, .na_rm = TRUE),
+         text = paste0("File Date: ", file_date, "\n", 
+                       "Analyte: ", analyte, "\n", 
+                       "Log Mean: ", round(cytokine_date_mean, 1))) %>%
+  filter(cytokine_date_mean != "NaN")
+
+# Get proportion of observations BLD
+prop_bld <- long_cytokine_data %>%
+  # rbind(long_cytokine_data %>% mutate(analyte = "Overall")) %>%
+  select(file_date, analyte, below_lod) %>%
+  summarise(sum = sum(below_lod),
+            plate_num = n(), 
+            .by = c(file_date, analyte)) %>%
+  mutate(prop = sum/plate_num * 100,
+         text = paste0("File Date: ", file_date, "\n", 
+                       "%BLD: ", round(prop, 1), "% (", sum, "/", plate_num, ")"))
+
+display_cytokine_data <- long_cytokine_data %>%
+  left_join(select(cytokine_means, file_date, analyte, cytokine_date_mean), by = c("file_date", "analyte")) %>%
+  mutate(cytokine_date_mean = exp(cytokine_date_mean)) %>%
+  # Replace obs below LOD with 1/2*LOD and High Vars with run mean
+  mutate(reading = ifelse(below_lod == 1, 0.5*lod, reading),
+         reading = ifelse(high_var == 1, cytokine_date_mean, reading)) %>%
+  select(barcode, file_date, date_run, analyte, reading) %>%
+  pivot_wider(id_cols = c(barcode, file_date, date_run),
+              names_from = analyte,
+              values_from = reading)
+
+```
+
+```{r set-up-plots}
+
+# Get proportion of observations with high variability
+prop_high_var <- long_cytokine_data %>%
+  # rbind(long_cytokine_data %>% mutate(analyte = "Overall")) %>%
+  select(file_date, analyte, high_var) %>%
+  summarise(sum = sum(high_var),
+            plate_num = n(), 
+            .by = c(file_date, analyte)) %>%
+  mutate(prop = sum/plate_num * 100,
+         text = paste0("File Date: ", file_date, "\n", 
+                       "%High Var: ", round(prop, 1), "% (", sum, "/", plate_num, ")"))
+
+lod_plot <- ggplot(prop_bld, aes(x = file_date, y = prop, fill = file_date, group = file_date, text = text)) +
+  geom_bar(stat = "identity", position = "dodge", color = "grey40") +
+  labs(x = "", y = "% of Obs Below LOD", fill = "Batch Date") +
+  facet_wrap(~analyte, ncol = 6) +
+  scale_fill_viridis_d(option = "plasma") +
+  theme_bw() + 
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 90))
+
+high_var_plot <- ggplot(prop_high_var, aes(x = file_date, y = prop, fill = file_date, group = file_date, text = text)) +
+  geom_bar(stat = "identity", position = "dodge", color = "grey40") +
+  labs(x = "", y = "% of Obs with High Var", fill = "Batch Date") +
+  facet_wrap(~analyte, ncol = 6) +
+  scale_fill_viridis_d(option = "plasma") +
+  theme_bw() + 
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 90))
+
+mean_vals <- ggplot(cytokine_means, 
+                    aes(x = analyte, y = cytokine_date_mean, group = file_date, fill = file_date, text = text)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "", y = "Mean Log(Measure)", fill = "Batch Date") +
+  scale_fill_viridis_d(option = "plasma") +
+  theme_bw() + 
+  theme(legend.position = "top",
+        axis.text.x = element_text(angle = 90))
+
+```
+
+
+<!-- UI -->
+
+Observations Below Limit of Detection
+=======================================
+
+Column 
+---------------------------------------
+
+### {data-height=700}
+
+```{r}
+ggplotly(lod_plot, tooltip = c("text")) %>% 
+  layout(legend = list(y = 1.15))
+```
+
+Observations With High Variability
+=======================================
+
+Column 
+---------------------------------------
+
+### {data-height=700}
+
+```{r}
+ggplotly(high_var_plot, tooltip = c("text")) %>% 
+  layout(legend = list(y = 1.15))
+```
+
+Mean Analyte Values
+=======================================
+
+Column 
+---------------------------------------
+
+### {data-height=700}
+```{r}
+ggplotly(mean_vals, tooltip = c("text")) %>% 
+  layout(legend = list(y = 1.1))
+```
+
+Raw Plate Data
+=======================================
+
+Column 
+---------------------------------------
+
+### Millipore plate data {data-height=800}
+
+```{r select-plate}
+
+selectInput(inputId = "plate_select", 
+            label = "Select cytokine plate by run date:",
+            choices = display_cytokine_data$date_run,
+            multiple = TRUE # Can select multiple plates
+            )
+
+output$data <- DT::renderDataTable({
+  req(input$plate_select)
+  
+  # Displayed data
+  display_cytokine_data %>% 
+    filter(date_run %in% input$plate_select) %>%
+    mutate(across(-c(barcode, file_date, date_run), ~round(as.numeric(.), 2))) %>%
+    DT::datatable(
+      rownames = FALSE,
+      extensions = "Buttons",
+      fillContainer = FALSE,
+      options = list(
+        scrollX = "500px",
+        scrollCollapse = TRUE,
+        scrollY = "500px",
+        # Show all observations immediately
+        pageLength = -1,
+        lengthChange = FALSE,
+        # Add button download information:
+        dom = "Bfrt",   # "B" renders the buttons
+        buttons = list(list(extend = "csv", text = "Download CSV"))
+      )
+    )
+})
+
+```
+
+```{r display-plate}
+
+DT::dataTableOutput("data")
+
+```
+
